@@ -24,6 +24,7 @@ import lxml.etree as ET
 import markdown
 from lxml.builder import ElementMaker
 from bs4 import BeautifulSoup, CData, Tag
+from bs4.element import NavigableString
 
 from .collection import ConfluencePageCollection
 from .mermaid import render_diagram
@@ -403,6 +404,7 @@ class ConfluenceStorageFormatConverter:
         self._transform_alerts(soup)
         self._transform_sections(soup)
         self._transform_emojis(soup)
+        self._transform_paragraphs(soup)
 
         return str(soup)
 
@@ -678,6 +680,15 @@ class ConfluenceStorageFormatConverter:
                 'ac:emoji-fallback': span.get_text(strip=True)
             })
             span.replace_with(emoticon)
+
+    def _transform_paragraphs(self, soup: BeautifulSoup):
+        """Transforms paragraphs to remove newline characters"""
+        for p in soup.find_all("p"):
+            for child in p.children:
+                if isinstance(child, NavigableString):
+                    new_text = child.replace("\n", "")
+                    child.replace_with(new_text)
+
 
 
 
