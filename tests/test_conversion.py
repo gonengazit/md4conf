@@ -13,13 +13,13 @@ import re
 import unittest
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 import md2conf.emoji as emoji
 from md2conf.collection import ConfluencePageCollection
 from md2conf.converter import (
     ConfluenceDocument,
     ConfluenceDocumentOptions,
-    elements_from_string,
-    elements_to_string,
 )
 from md2conf.matcher import Matcher, MatcherOptions
 from md2conf.mermaid import has_mmdc
@@ -33,8 +33,7 @@ logging.basicConfig(
 
 def canonicalize(content: str) -> str:
     "Converts a Confluence Storage Format (CSF) document to the normalized format."
-
-    return elements_to_string(elements_from_string(content))
+    return BeautifulSoup(content, "html.parser").prettify()
 
 
 def standardize(content: str) -> str:

@@ -17,11 +17,9 @@ import shutil
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
-from urllib.parse import ParseResult, quote_plus, urlparse, urlunparse
+from typing import Literal, Optional, Union
+from urllib.parse import quote_plus, urlparse, urlunparse
 
-import lxml.etree as ET
-from lxml.builder import ElementMaker
 from bs4 import BeautifulSoup, CData, Tag
 from bs4.element import NavigableString
 
@@ -31,16 +29,6 @@ from .metadata import ConfluenceSiteMetadata
 from .properties import PageError
 from .scanner import ScannedDocument, Scanner
 
-namespaces = {
-    "ac": "http://atlassian.com/content",
-    "ri": "http://atlassian.com/resource/identifier",
-}
-for key, value in namespaces.items():
-    ET.register_namespace(key, value)
-
-HTML = ElementMaker()
-AC = ElementMaker(namespace=namespaces["ac"])
-RI = ElementMaker(namespace=namespaces["ri"])
 
 LOGGER = logging.getLogger(__name__)
 
@@ -98,55 +86,6 @@ def markdown_to_html(content: str) -> str:
         raise ConversionError(f"pandoc error: {stderr}")
     else:
         return stdout.decode("utf-8")
-
-
-
-
-def _elements_from_strings(dtd_path: Path, items: list[str]) -> ET._Element:
-    """
-    Creates a fragment of several XML nodes from their string representation wrapped in a root element.
-
-    :param dtd_path: Path to a DTD document that defines entities like &cent; or &copy;.
-    :param items: Strings to parse into XML fragments.
-    :returns: An XML document as an element tree.
-    """
-
-    parser = ET.XMLParser(
-        remove_blank_text=True,
-        remove_comments=True,
-        strip_cdata=False,
-        load_dtd=True,
-    )
-
-    ns_attr_list = "".join(
-        f' xmlns:{key}="{value}"' for key, value in namespaces.items()
-    )
-
-    data = [
-        '<?xml version="1.0"?>',
-        f'<!DOCTYPE ac:confluence PUBLIC "-//Atlassian//Confluence 4 Page//EN" "{dtd_path.as_posix()}">'
-        f"<root{ns_attr_list}>",
-    ]
-    data.extend(items)
-    data.append("</root>")
-
-    try:
-        return ET.fromstringlist(data, parser=parser)
-    except ET.XMLSyntaxError as ex:
-        raise ParseError() from ex
-
-
-def elements_from_strings(items: list[str]) -> ET._Element:
-    "Creates a fragment of several XML nodes from their string representation wrapped in a root element."
-
-    resource_path = resources.files(__package__).joinpath("entities.dtd")
-    with resources.as_file(resource_path) as dtd_path:
-        return _elements_from_strings(dtd_path, items)
-
-
-def elements_from_string(content: str) -> ET._Element:
-    return elements_from_strings([content])
-
 
 _languages = [
     "abap",
@@ -228,25 +167,6 @@ _languages = [
     "xquery",
     "yaml",
 ]
-
-
-class NodeVisitor:
-    def visit(self, node: ET._Element) -> None:
-        "Recursively visits all descendants of this node."
-
-        if len(node) < 1:
-            return
-
-        for index in range(len(node)):
-            source = node[index]
-            target = self.transform(source)
-            if target is not None:
-                node[index] = target
-            else:
-                self.visit(source)
-
-    def transform(self, child: ET._Element) -> Optional[ET._Element]:
-        pass
 
 
 def title_to_identifier(title: str) -> str:
@@ -659,17 +579,6 @@ class ConfluenceStorageFormatConverter:
                     child.replace_with(new_text)
 
 
-
-
-class ConfluenceStorageFormatCleaner(NodeVisitor):
-    "Removes volatile attributes from a Confluence storage format XHTML document."
-
-    def transform(self, child: ET._Element) -> Optional[ET._Element]:
-        child.attrib.pop(ET.QName(namespaces["ac"], "macro-id"), None)
-        child.attrib.pop(ET.QName(namespaces["ri"], "version-at-save"), None)
-        return None
-
-
 class DocumentError(RuntimeError):
     "Raised when a converted Markdown document has an unexpected element or attribute."
 
@@ -723,7 +632,6 @@ class ConfluenceDocument:
     images: list[Path]
 
     options: ConfluenceDocumentOptions
-    root: ET._Element
 
     @classmethod
     def create(
@@ -820,48 +728,15 @@ def sanitize_confluence(html: str) -> str:
 
     if not html:
         return ""
-
-    root = elements_from_strings([html])
-    ConfluenceStorageFormatCleaner().visit(root)
-    return elements_to_string(root)
-
-
-def elements_to_string(root: ET._Element) -> str:
-    xml = ET.tostring(root, encoding="utf8", method="xml").decode("utf8")
-    m = re.match(r"^<root\s+[^>]*>(.*)</root>\s*$", xml, re.DOTALL)
-    if m:
-        return m.group(1)
-    else:
-        raise ValueError("expected: Confluence content")
-
-
-def _content_to_string(dtd_path: Path, content: str) -> str:
-    parser = ET.XMLParser(
-        remove_blank_text=True,
-        remove_comments=True,
-        strip_cdata=False,
-        load_dtd=True,
-    )
-
-    ns_attr_list = "".join(
-        f' xmlns:{key}="{value}"' for key, value in namespaces.items()
-    )
-
-    data = [
-        '<?xml version="1.0"?>',
-        f'<!DOCTYPE ac:confluence PUBLIC "-//Atlassian//Confluence 4 Page//EN" "{dtd_path.as_posix()}">'
-        f"<root{ns_attr_list}>",
-    ]
-    data.append(content)
-    data.append("</root>")
-
-    tree = ET.fromstringlist(data, parser=parser)
-    return ET.tostring(tree, pretty_print=True).decode("utf-8")
+    soup = BeautifulSoup(html, "html.parser")
+    VOLATILE_ATTRS = ["ac:macro-id", "ri:version-at-save"]
+    for tag in soup.find_all(True):
+        for attr in VOLATILE_ATTRS:
+            if attr in tag.attrs:
+                del tag[attr]
+    return str(soup)
 
 
 def content_to_string(content: str) -> str:
     "Converts a Confluence Storage Format document returned by the API into a readable XML document."
-
-    resource_path = resources.files(__package__).joinpath("entities.dtd")
-    with resources.as_file(resource_path) as dtd_path:
-        return _content_to_string(dtd_path, content)
+    return content
