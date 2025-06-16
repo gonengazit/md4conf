@@ -397,7 +397,7 @@ class ConfluenceSession:
         if response.text:
             LOGGER.debug("Received HTTP payload:\n%s", response.text)
         response.raise_for_status()
-        return response.json()
+        return typing.cast(JsonType, response.json())
 
     def _fetch(
         self, path: str, query: Optional[dict[str, str]] = None
@@ -596,7 +596,7 @@ class ConfluenceSession:
                 LOGGER.info("Uploading attachment: %s", attachment_name)
                 response = self.session.post(
                     url,
-                    files=file_to_upload,  # type: ignore
+                    files=file_to_upload,  # type: ignore[arg-type]
                     headers={"X-Atlassian-Token": "no-check"},
                 )
         elif raw_data is not None:
@@ -608,14 +608,14 @@ class ConfluenceSession:
                 "comment": comment,
                 "file": (
                     attachment_name,  # will truncate path component
-                    raw_file,  # type: ignore
+                    raw_file,  # type: ignore[dict-item]
                     content_type,
                     {"Expires": "0"},
                 ),
             }
             response = self.session.post(
                 url,
-                files=file_to_upload,  # type: ignore
+                files=file_to_upload,  # type: ignore[arg-type]
                 headers={"X-Atlassian-Token": "no-check"},
             )
         else:

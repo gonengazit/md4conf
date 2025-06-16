@@ -15,7 +15,7 @@ import os.path
 import sys
 import typing
 from pathlib import Path
-from typing import Any, Literal, Optional, Sequence, Union
+from typing import Any, Literal, Optional, Sequence, Union, override
 
 import requests
 
@@ -55,6 +55,7 @@ class Arguments(argparse.Namespace):
 class KwargsAppendAction(argparse.Action):
     """Append key-value pairs to a dictionary"""
 
+    @override
     def __call__(
         self,
         parser: argparse.ArgumentParser,

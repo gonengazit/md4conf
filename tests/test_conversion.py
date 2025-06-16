@@ -13,15 +13,13 @@ import re
 import typing
 import unittest
 from pathlib import Path
+from typing import override
 
 from bs4 import BeautifulSoup
 
 import md2conf.emoji as emoji
 from md2conf.collection import ConfluencePageCollection
-from md2conf.converter import (
-    ConfluenceDocument,
-    ConfluenceDocumentOptions,
-)
+from md2conf.converter import ConfluenceDocument, ConfluenceDocumentOptions
 from md2conf.matcher import Matcher, MatcherOptions
 from md2conf.mermaid import has_mmdc
 from md2conf.metadata import ConfluenceSiteMetadata
@@ -35,7 +33,7 @@ logging.basicConfig(
 def canonicalize(content: str) -> str:
     "Converts a Confluence Storage Format (CSF) document to the normalized format."
 
-    # Safety: prettify will always return a str for `encoding=None`
+    # Safety: prettify will always return `str` for `encoding=None`
     return typing.cast(str, BeautifulSoup(content, "html.parser").prettify())
 
 
@@ -52,6 +50,7 @@ class TestConversion(unittest.TestCase):
     target_dir: Path
     site_metadata: ConfluenceSiteMetadata
 
+    @override
     def setUp(self) -> None:
         self.maxDiff = None
 

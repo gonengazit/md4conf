@@ -8,7 +8,7 @@ Copyright 2022-2025, Levente Hunyadi
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, override
 
 from .api import ConfluenceLabel, ConfluenceSession
 from .converter import (
@@ -45,6 +45,7 @@ class SynchronizingProcessor(Processor):
         super().__init__(options, api.site, root_dir)
         self.api = api
 
+    @override
     def _synchronize_tree(
         self, root: DocumentNode, root_id: Optional[ConfluencePageID]
     ) -> None:
@@ -61,7 +62,7 @@ class SynchronizingProcessor(Processor):
                 f"expected: root page ID in options, or explicit page ID in {root.absolute_path}"
             )
         elif root.page_id is not None and root_id is not None:
-            if root.page_id != root_id:
+            if root.page_id != root_id.page_id:
                 raise PageError(
                     f"mismatched inferred page ID of {root_id.page_id} and explicit page ID in {root.absolute_path}"
                 )
@@ -112,6 +113,7 @@ class SynchronizingProcessor(Processor):
         for child_node in node.children():
             self._synchronize_subtree(child_node, ConfluencePageID(page.id))
 
+    @override
     def _update_page(
         self, page_id: ConfluencePageID, document: ConfluenceDocument, path: Path
     ) -> None:
@@ -142,11 +144,7 @@ class SynchronizingProcessor(Processor):
         title = None
         if document.title is not None:
             meta = self.page_metadata.get(path)
-            if (
-                meta is not None
-                and meta.space_key is not None
-                and meta.title != document.title
-            ):
+            if meta is not None and meta.title != document.title:
                 conflicting_page_id = self.api.page_exists(
                     document.title, space_id=self.api.space_key_to_id(meta.space_key)
                 )
@@ -205,6 +203,7 @@ class SynchronizingProcessorFactory(ProcessorFactory):
         super().__init__(options, api.site)
         self.api = api
 
+    @override
     def create(self, root_dir: Path) -> Processor:
         return SynchronizingProcessor(self.api, self.options, root_dir)
 

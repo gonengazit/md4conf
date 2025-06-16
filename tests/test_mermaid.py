@@ -11,6 +11,7 @@ import os
 import shutil
 import unittest
 from pathlib import Path
+from typing import override
 
 from md2conf.mermaid import has_mmdc, render_diagram
 
@@ -31,6 +32,7 @@ graph TD
 class TestMermaidRendering(unittest.TestCase):
     out_dir: Path
 
+    @override
     def setUp(self) -> None:
         self.maxDiff = 1024
 
@@ -41,6 +43,7 @@ class TestMermaidRendering(unittest.TestCase):
         self.sample_dir = parent_dir / "sample"
         os.makedirs(self.out_dir, exist_ok=True)
 
+    @override
     def tearDown(self) -> None:
         shutil.rmtree(self.out_dir)
 

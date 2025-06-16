@@ -12,6 +12,7 @@ import os.path
 import shutil
 import unittest
 from pathlib import Path
+from typing import override
 
 from md2conf.api import ConfluenceAPI, ConfluenceAttachment, ConfluencePage
 from md2conf.application import Application
@@ -34,6 +35,7 @@ class TestAPI(unittest.TestCase):
     out_dir: Path
     sample_dir: Path
 
+    @override
     def setUp(self) -> None:
         test_dir = Path(__file__).parent
         parent_dir = test_dir.parent
@@ -42,6 +44,7 @@ class TestAPI(unittest.TestCase):
         self.sample_dir = parent_dir / "sample"
         os.makedirs(self.out_dir, exist_ok=True)
 
+    @override
     def tearDown(self) -> None:
         shutil.rmtree(self.out_dir)
 

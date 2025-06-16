@@ -6,22 +6,20 @@ Copyright 2022-2025, Levente Hunyadi
 :see: https://github.com/hunyadi/md2conf
 """
 
-# mypy: disable-error-code="dict-item"
-
 import hashlib
 import logging
 import os.path
 import re
 import shutil
 import subprocess
-import typing
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Callable, Literal, Optional, Sequence, Union, overload
 from urllib.parse import quote_plus, urlparse, urlunparse
 
 from bs4 import BeautifulSoup, CData, Tag
-from bs4.element import NavigableString, PageElement
+from bs4._typing import _AtMostOneElement, _QueryResults
+from bs4.element import AttributeValueList, NavigableString, PageElement
 
 from .collection import ConfluencePageCollection
 from .mermaid import render_diagram
@@ -30,6 +28,35 @@ from .properties import PageError
 from .scanner import ScannedDocument, Scanner
 
 LOGGER = logging.getLogger(__name__)
+
+
+@overload
+def bs4_tagonly[**P](f: Callable[P, _QueryResults]) -> Callable[P, Sequence[Tag]]: ...
+@overload
+def bs4_tagonly[**P](
+    f: Callable[P, _AtMostOneElement],
+) -> Callable[P, Optional[Tag]]: ...
+
+
+def bs4_tagonly[**P](
+    f: Callable[P, _QueryResults] | Callable[P, _AtMostOneElement],
+) -> Callable[P, Sequence[Tag] | Optional[Tag]]:
+    def _inner(*args: P.args, **kwargs: P.kwargs) -> Sequence[Tag] | Optional[Tag]:
+        if "name" in kwargs:
+            assert kwargs["name"] is not None
+        else:
+            # (self, name, ...)
+            assert len(args) >= 2, args
+
+        # Safety: From bs4 code: "NavigableString can only match [...] does not define any name or attribute rules"
+        #         we require `name` to not be None
+        return f(*args, **kwargs)  # type: ignore[return-value]
+
+    return _inner
+
+
+bs4_find = bs4_tagonly(Tag.find)
+bs4_find_all = bs4_tagonly(Tag.find_all)
 
 
 class ParseError(RuntimeError):
@@ -329,7 +356,7 @@ class ConfluenceStorageFormatConverter:
             body_tag = self.soup.new_tag("ac:plain-text-body")
             body_tag.append(CData(plain_text_body))
             macro.append(body_tag)
-        
+
         if rich_text_body is not None:
             rich_body_tag = self.soup.new_tag("ac:rich-text-body")
             rich_body_tag.extend(rich_text_body)
@@ -337,9 +364,10 @@ class ConfluenceStorageFormatConverter:
 
         return macro
 
-    def _transform_headings(self):
+    def _transform_headings(self) -> None:
         """Adds heading anchors and populates the Table of Contents."""
-        heading_tags = self.soup.find_all(re.compile(r"^h[1-6]$", re.IGNORECASE))
+
+        heading_tags = bs4_find_all(self.soup, re.compile(r"^h[1-6]$", re.IGNORECASE))
         for heading in heading_tags:
             level = int(heading.name[1])
             title = element_to_text(heading)
@@ -350,10 +378,13 @@ class ConfluenceStorageFormatConverter:
                 anchor_macro = self._create_macro("anchor", {"": anchor_id})
                 heading.insert(0, anchor_macro)
 
-    def _transform_links(self):
+    def _transform_links(self) -> None:
         """Converts relative page links to Confluence web links."""
-        for anchor in self.soup.find_all("a", href=True):
+
+        for anchor in bs4_find_all(self.soup, "a", href=True):
             url = anchor["href"]
+            assert isinstance(url, str)
+
             if is_absolute_url(url):
                 continue
 
@@ -466,29 +497,34 @@ class ConfluenceStorageFormatConverter:
 
         return ac_image
 
-    def _transform_paragraph_images(self):
+    def _transform_paragraph_images(self) -> None:
         """Transforms <p><img></p> into a single <ac:image> block."""
-        for p_tag in self.soup.find_all("p"):
+
+        for p_tag in bs4_find_all(self.soup, "p"):
             # Find paragraphs containing only an image tag and whitespace
             meaningful_children = [c for c in p_tag.children if isinstance(c, Tag)]
             if len(meaningful_children) == 1 and meaningful_children[0].name == "img":
                 ac_image = self._create_ac_image_tag(meaningful_children[0])
                 p_tag.replace_with(ac_image)
 
-    def _transform_images(self):
+    def _transform_images(self) -> None:
         """Transforms standalone <img> tags."""
-        for img_tag in self.soup.find_all("img"):
+        for img_tag in bs4_find_all(self.soup, "img"):
             ac_image = self._create_ac_image_tag(img_tag)
             img_tag.replace_with(ac_image)
 
-    def _transform_code_blocks(self):
+    def _transform_code_blocks(self) -> None:
         """Converts <pre><code> blocks into Confluence code macros."""
-        for pre_tag in self.soup.find_all("pre"):
+        for pre_tag in bs4_find_all(self.soup, "pre"):
             code_tag = pre_tag.find("code")
             if not code_tag:
                 continue
 
-            language = pre_tag.get("class", [""])[0]
+            pre_classes = pre_tag.get("class")
+            if isinstance(pre_classes, list):
+                language = pre_classes[0]
+            else:
+                language = ""
             content = code_tag.get_text().rstrip()
 
             if language.lower() == "mermaid":
@@ -520,17 +556,22 @@ class ConfluenceStorageFormatConverter:
 
             pre_tag.replace_with(new_tag)
 
-    def _transform_toc(self):
+    def _transform_toc(self) -> None:
         """Transforms a [TOC] placeholder into a Confluence TOC macro."""
-        for p_tag in self.soup.find_all("p"):
+        for p_tag in bs4_find_all(self.soup, "p"):
             if p_tag.get_text(strip=True) in ["[TOC]", "[[TOC]]"]:
                 toc_macro = self._create_macro("toc", {"style": "default"})
                 p_tag.replace_with(toc_macro)
 
-    def _transform_admonitions(self):
+    def _transform_admonitions(self) -> None:
         """Transforms admonition divs into info/note/warning macros."""
-        for div in self.soup.find_all("div", class_="admonition"):
-            class_list = div.get("class", [])
+        for div in bs4_find_all(self.soup, "div", class_="admonition"):
+            class_list_ = div.get("class")
+            if isinstance(class_list_, AttributeValueList):
+                class_list: Sequence[str] = class_list_
+            else:
+                class_list = []
+
             admonition_type = next(
                 (c for c in class_list if c in ["info", "tip", "note", "warning"]), None
             )
@@ -543,13 +584,15 @@ class ConfluenceStorageFormatConverter:
                 params["title"] = title_p.get_text(strip=True)
                 title_p.decompose()  # Remove the title paragraph
 
-            macro = self._create_macro(admonition_type, params, rich_text_body=div.contents)
+            macro = self._create_macro(
+                admonition_type, params, rich_text_body=div.contents
+            )
             div.replace_with(macro)
 
-    def _transform_alerts(self):
+    def _transform_alerts(self) -> None:
         """Transforms GitHub/GitLab style blockquote alerts."""
-        for bq in self.soup.find_all("blockquote"):
-            p_tag = bq.find("p")
+        for bq in bs4_find_all(self.soup, "blockquote"):
+            p_tag = bs4_find(bq, "p")
             if not p_tag or not p_tag.text:
                 continue
 
@@ -585,15 +628,25 @@ class ConfluenceStorageFormatConverter:
                 # Remove the alert prefix from the text node
                 first_text_node = p_tag.find(string=True)
                 if first_text_node:
-                    first_text_node.replace_with(first_text_node.string.lstrip()[skip:])
+                    # Gal: Unclear how this cannot be true, but that's what the typing says
+                    assert isinstance(first_text_node, (Tag, NavigableString))
 
-                macro = self._create_macro(class_name, rich_text_body = bq.contents)
+                    string = first_text_node.string
+                    # Gal: Should always be true due to the find filter...
+                    assert string is not None
+
+                    # TODO: Get rid of the `NavigableString` cast when https://bugs.launchpad.net/beautifulsoup/+bug/2114746 is resolved
+                    first_text_node.replace_with(
+                        NavigableString(string.lstrip()[skip:])
+                    )
+
+                macro = self._create_macro(class_name, rich_text_body=bq.contents)
 
                 bq.replace_with(macro)
 
-    def _transform_sections(self):
+    def _transform_sections(self) -> None:
         """Transforms <details><summary> sections into expand macros."""
-        for details in self.soup.find_all("details"):
+        for details in bs4_find_all(self.soup, "details"):
             summary = details.find("summary")
             if not summary:
                 continue
@@ -601,45 +654,62 @@ class ConfluenceStorageFormatConverter:
             title = summary.get_text(strip=True)
             summary.decompose()  # Remove summary from content
 
-            macro = self._create_macro("expand", {"title": title}, rich_text_body=details.contents)
+            macro = self._create_macro(
+                "expand", {"title": title}, rich_text_body=details.contents
+            )
             details.replace_with(macro)
 
-    def _transform_emojis(self):
+    def _transform_emojis(self) -> None:
         """Transforms emoji spans into emoticons."""
-        for span in self.soup.find_all("span", attrs={"data-emoji-shortname": True}):
+        for span in bs4_find_all(
+            self.soup, "span", attrs={"data-emoji-shortname": True}
+        ):
             shortname = span["data-emoji-shortname"]
+            assert isinstance(shortname, str)
+            emoji_id = span.get("data-emoji-unicode", "")
+            assert isinstance(emoji_id, str)
             emoticon = self.soup.new_tag(
                 "ac:emoticon",
                 attrs={
                     "ac:name": shortname,
                     "ac:emoji-shortname": f":{shortname}:",
-                    "ac:emoji-id": span.get("data-emoji-unicode", ""),
+                    "ac:emoji-id": emoji_id,
                     "ac:emoji-fallback": span.get_text(strip=True),
                 },
             )
             span.replace_with(emoticon)
 
-    def _transform_paragraphs(self):
+    def _transform_paragraphs(self) -> None:
         """Transforms paragraphs to remove newline characters"""
-        for p in self.soup.find_all("p"):
+        for p in bs4_find_all(self.soup, "p"):
             for child in p.children:
                 if isinstance(child, NavigableString):
                     new_text = child.replace("\n", "")
-                    child.replace_with(new_text)
+
+                    # TODO: Get rid of the `NavigableString` cast when https://bugs.launchpad.net/beautifulsoup/+bug/2114746 is resolved
+                    child.replace_with(NavigableString(new_text))
 
     def _transform_math(self) -> None:
-        for math_inline in self.soup.find_all("span", attrs={"class": "math inline"}):
+        for math_inline in bs4_find_all(
+            self.soup, "span", attrs={"class": "math inline"}
+        ):
+            math_string = math_inline.string
+            assert math_string is not None
             math_macro = self._create_macro(
                 "eazy-math-inline",
-                {"body": math_inline.string.lstrip(" (\\").rstrip("\\) ")},
+                {"body": math_string.lstrip(" (\\").rstrip("\\) ")},
             )
             math_inline.replace_with(math_macro)
 
-        for math_block in self.soup.find_all("span", attrs={"class": "math display"}):
+        for math_block in bs4_find_all(
+            self.soup, "span", attrs={"class": "math display"}
+        ):
+            math_string = math_block.string
+            assert math_string is not None
             math_macro = self._create_macro(
                 "easy-math-block",
                 {
-                    "body": math_block.string.lstrip("\\[ ").rstrip("]\\ "),
+                    "body": math_string.lstrip("\\[ ").rstrip("]\\ "),
                     "align": "center",
                 },
             )
@@ -801,9 +871,7 @@ def sanitize_confluence(html: str) -> str:
         return ""
     soup = BeautifulSoup(html, "html.parser")
     VOLATILE_ATTRS = ["ac:macro-id", "ri:version-at-save"]
-    for tag in soup.find_all(True):
-        # Safety: As an optimization, find_all(True) returns only tags
-        tag = typing.cast(Tag, tag)
+    for tag in bs4_find_all(soup, True):
         for attr in VOLATILE_ATTRS:
             if attr in tag.attrs:
                 del tag[attr]
