@@ -21,7 +21,7 @@ from typing import Literal, Optional, Union
 from urllib.parse import quote_plus, urlparse, urlunparse
 
 from bs4 import BeautifulSoup, CData, Tag
-from bs4.element import NavigableString
+from bs4.element import NavigableString, PageElement
 
 from .collection import ConfluencePageCollection
 from .mermaid import render_diagram
@@ -311,6 +311,7 @@ class ConfluenceStorageFormatConverter:
         name: str,
         params: Optional[dict[str, str]] = None,
         plain_text_body: Optional[str] = None,
+        rich_text_body = Optional[list[PageElement]] = None,
     ) -> Tag:
         """Helper to create a generic Confluence <ac:structured-macro>."""
         macro = self.soup.new_tag("ac:structured-macro")
@@ -328,6 +329,11 @@ class ConfluenceStorageFormatConverter:
             body_tag = self.soup.new_tag("ac:plain-text-body")
             body_tag.append(CData(plain_text_body))
             macro.append(body_tag)
+        
+        if rich_text_body is not None:
+            rich_body_tag = self.soup.new_tag("ac:rich-text-body")
+            rich_body_tag.extend(rich_text_body)
+            macro.append(rich_text_body)
 
         return macro
 
@@ -537,11 +543,7 @@ class ConfluenceStorageFormatConverter:
                 params["title"] = title_p.get_text(strip=True)
                 title_p.decompose()  # Remove the title paragraph
 
-            macro = self._create_macro(admonition_type, params)
-            # Move remaining content into the rich text body
-            macro_body = self.soup.new_tag("ac:rich-text-body")
-            macro_body.extend(div.contents)
-            macro.append(macro_body)
+            macro = self._create_macro(admonition_type, params, rich_text_body=div.contents)
             div.replace_with(macro)
 
     def _transform_alerts(self):
@@ -585,13 +587,7 @@ class ConfluenceStorageFormatConverter:
                 if first_text_node:
                     first_text_node.replace_with(first_text_node.string.lstrip()[skip:])
 
-                macro = self._create_macro(class_name)
-                print(p_tag)
-                print(bq.contents)
-                # Move remaining content into the rich text body
-                macro_body = self.soup.new_tag("ac:rich-text-body")
-                macro_body.extend(bq.contents)
-                macro.append(macro_body)
+                macro = self._create_macro(class_name, rich_text_body = bq.contents)
 
                 bq.replace_with(macro)
 
@@ -605,8 +601,7 @@ class ConfluenceStorageFormatConverter:
             title = summary.get_text(strip=True)
             summary.decompose()  # Remove summary from content
 
-            macro = self._create_macro("expand", {"title": title})
-            macro.find("ac:rich-text-body").extend(details.contents)
+            macro = self._create_macro("expand", {"title": title}, rich_text_body=details.contents)
             details.replace_with(macro)
 
     def _transform_emojis(self):
