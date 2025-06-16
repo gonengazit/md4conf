@@ -14,6 +14,7 @@ import os.path
 import re
 import shutil
 import subprocess
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Optional, Union
@@ -89,7 +90,7 @@ def markdown_to_html(content: str) -> str:
     )
     stdout, stderr = pandoc.communicate(content.encode("utf-8"))
     if pandoc.returncode != 0:
-        raise ConversionError(f"pandoc error: {stderr}")
+        raise ConversionError(f"pandoc error: {stderr!r}")
     else:
         return stdout.decode("utf-8")
 
@@ -279,7 +280,7 @@ class ConfluenceStorageFormatConverter:
         self.images: list[Path] = []
         self.embedded_images: dict[str, bytes] = {}
 
-    def convert(self, html_content: str) -> str:
+    def convert(self, html_content: str) -> None:
         """
         Main conversion function. Parses HTML and applies all transformations.
 
@@ -421,7 +422,7 @@ class ConfluenceStorageFormatConverter:
     def _create_ac_image_tag(self, img_tag: Tag) -> Tag:
         """Helper to create a Confluence <ac:image> tag from an HTML <img> tag."""
         src = img_tag.get("src")
-        if not src:
+        if not src or not isinstance(src, str):
             raise DocumentError("Image lacks 'src' attribute.")
 
         ac_image = self.soup.new_tag("ac:image")
@@ -450,6 +451,7 @@ class ConfluenceStorageFormatConverter:
 
         # Add caption if alt text exists
         if img_tag.has_attr("alt"):
+            assert isinstance(img_tag["alt"], str)
             caption_tag = self.soup.new_tag("ac:caption")
             p_tag = self.soup.new_tag("p")
             p_tag.string = img_tag["alt"]
@@ -785,6 +787,8 @@ def sanitize_confluence(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     VOLATILE_ATTRS = ["ac:macro-id", "ri:version-at-save"]
     for tag in soup.find_all(True):
+        # Safety: As an optimization, find_all(True) returns only tags
+        tag = typing.cast(Tag, tag)
         for attr in VOLATILE_ATTRS:
             if attr in tag.attrs:
                 del tag[attr]

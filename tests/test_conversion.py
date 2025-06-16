@@ -10,6 +10,7 @@ import logging
 import os
 import os.path
 import re
+import typing
 import unittest
 from pathlib import Path
 
@@ -33,7 +34,9 @@ logging.basicConfig(
 
 def canonicalize(content: str) -> str:
     "Converts a Confluence Storage Format (CSF) document to the normalized format."
-    return BeautifulSoup(content, "html.parser").prettify()
+
+    # Safety: prettify will always return a str for `encoding=None`
+    return typing.cast(str, BeautifulSoup(content, "html.parser").prettify())
 
 
 def standardize(content: str) -> str:
