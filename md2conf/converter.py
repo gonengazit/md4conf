@@ -12,16 +12,15 @@ import hashlib
 import importlib.resources as resources
 import logging
 import os.path
+import subprocess
+import shutil
 import re
-import uuid
-import xml.etree.ElementTree
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 from urllib.parse import ParseResult, quote_plus, urlparse, urlunparse
 
 import lxml.etree as ET
-import markdown
 from lxml.builder import ElementMaker
 from bs4 import BeautifulSoup, CData, Tag
 from bs4.element import NavigableString
@@ -82,53 +81,25 @@ def encode_title(text: str) -> str:
     return quote_plus(text.strip())
 
 
-def emoji_generator(
-    index: str,
-    shortname: str,
-    alias: Optional[str],
-    uc: Optional[str],
-    alt: str,
-    title: Optional[str],
-    category: Optional[str],
-    options: dict[str, Any],
-    md: markdown.Markdown,
-) -> xml.etree.ElementTree.Element:
-    name = (alias or shortname).strip(":")
-    span = xml.etree.ElementTree.Element("span", {"data-emoji-shortname": name})
-    if uc is not None:
-        span.attrib["data-emoji-unicode"] = uc
-
-        # convert series of Unicode code point hexadecimal values into characters
-        span.text = "".join(chr(int(item, base=16)) for item in uc.split("-"))
-    else:
-        span.text = alt
-    return span
-
-
 def markdown_to_html(content: str) -> str:
-    return markdown.markdown(
-        content,
-        extensions=[
-            "admonition",
-            "markdown.extensions.tables",
-            # "markdown.extensions.fenced_code",
-            "pymdownx.emoji",
-            "pymdownx.highlight",  # required by `pymdownx.superfences`
-            "pymdownx.magiclink",
-            "pymdownx.superfences",
-            "pymdownx.tilde",
-            "sane_lists",
-            "md_in_html",
-        ],
-        extension_configs={
-            "pymdownx.emoji": {
-                "emoji_generator": emoji_generator,
-            },
-            "pymdownx.highlight": {
-                "use_pygments": False,
-            },
-        },
-    )
+    if shutil.which("pandoc") is None:
+        raise ConversionError("Couldn't find pandoc")
+
+    pandoc_filters_dir = Path(__file__).parent / Path("../pandoc_filters")
+    cmd = ["pandoc", "--from=gfm+hard_line_breaks+wikilinks_title_after_pipe", "--to=html", "--mathjax", f"--lua-filter={pandoc_filters_dir/'highlight.lua'}", f"--lua-filter={pandoc_filters_dir /'wikilink-image-filter.lua'}"]
+    pandoc = subprocess.Popen(cmd,
+                     stdin=subprocess.PIPE,
+                     stdout=subprocess.PIPE,
+                     stderr=subprocess.PIPE,
+                     text=False,
+                     )
+    stdout, stderr = pandoc.communicate(content.encode("utf-8"))
+    if pandoc.returncode != 0:
+        raise ConversionError(f"pandoc error: {stderr}")
+    else:
+        return stdout.decode("utf-8")
+
+
 
 
 def _elements_from_strings(dtd_path: Path, items: list[str]) -> ET._Element:
@@ -391,22 +362,20 @@ class ConfluenceStorageFormatConverter:
         Returns:
             A string with the converted Confluence Storage Format XHTML.
         """
-        soup = BeautifulSoup(html_content, 'html.parser')
+        self.soup = BeautifulSoup(html_content, 'html.parser')
 
         # The order of transformations can be important.
-        self._transform_paragraph_images(soup)
-        self._transform_headings(soup)
-        self._transform_links(soup)
-        self._transform_images(soup)
-        self._transform_code_blocks(soup)
-        self._transform_toc(soup)
-        self._transform_admonitions(soup)
-        self._transform_alerts(soup)
-        self._transform_sections(soup)
-        self._transform_emojis(soup)
-        self._transform_paragraphs(soup)
-
-        return str(soup)
+        self._transform_paragraph_images()
+        self._transform_headings()
+        self._transform_links()
+        self._transform_images()
+        self._transform_code_blocks()
+        self._transform_toc()
+        self._transform_admonitions()
+        self._transform_alerts()
+        self._transform_sections()
+        self._transform_emojis()
+        self._transform_paragraphs()
 
     def _create_macro(self, soup: BeautifulSoup, name: str, params: Optional[dict[str, str]] = None, plain_text_body: Optional[str] = None) -> Tag:
         """Helper to create a generic Confluence <ac:structured-macro>."""
@@ -428,9 +397,9 @@ class ConfluenceStorageFormatConverter:
 
         return macro
 
-    def _transform_headings(self, soup: BeautifulSoup):
+    def _transform_headings(self):
         """Adds heading anchors and populates the Table of Contents."""
-        heading_tags = soup.find_all(re.compile(r"^h[1-6]$", re.IGNORECASE))
+        heading_tags = self.soup.find_all(re.compile(r"^h[1-6]$", re.IGNORECASE))
         for heading in heading_tags:
             level = int(heading.name[1])
             title = element_to_text(heading)
@@ -438,12 +407,12 @@ class ConfluenceStorageFormatConverter:
 
             if self.options.heading_anchors:
                 anchor_id = title_to_identifier(title)
-                anchor_macro = self._create_macro(soup, "anchor", {"": anchor_id})
+                anchor_macro = self._create_macro(self.soup, "anchor", {"": anchor_id})
                 heading.insert(0, anchor_macro)
 
-    def _transform_links(self, soup: BeautifulSoup):
+    def _transform_links(self):
         """Converts relative page links to Confluence web links."""
-        for anchor in soup.find_all("a", href=True):
+        for anchor in self.soup.find_all("a", href=True):
             url = anchor['href']
             if is_absolute_url(url):
                 continue
@@ -461,8 +430,8 @@ class ConfluenceStorageFormatConverter:
             ):
                 if self.options.heading_anchors:
                     target = relative_url.fragment.lstrip("#")
-                    link_wrapper = soup.new_tag("ac:link", attrs={'ac:anchor': target})
-                    link_body = soup.new_tag("ac:link-body")
+                    link_wrapper = self.soup.new_tag("ac:link", attrs={'ac:anchor': target})
+                    link_body = self.soup.new_tag("ac:link-body")
                     link_body.extend(anchor.contents) # Move content
                     link_wrapper.append(link_body)
                     anchor.replace_with(link_wrapper)
@@ -503,20 +472,20 @@ class ConfluenceStorageFormatConverter:
                 else:
                     raise
 
-    def _create_ac_image_tag(self, soup: BeautifulSoup, img_tag: Tag) -> Tag:
+    def _create_ac_image_tag(self, img_tag: Tag) -> Tag:
         """Helper to create a Confluence <ac:image> tag from an HTML <img> tag."""
         src = img_tag.get('src')
         if not src:
             raise DocumentError("Image lacks 'src' attribute.")
 
-        ac_image = soup.new_tag("ac:image")
+        ac_image = self.soup.new_tag("ac:image")
         for attr in ['width', 'height']:
             if img_tag.has_attr(attr):
                 ac_image[f'ac:{attr}'] = img_tag[attr]
 
         # Add attachment or URL element
         if is_absolute_url(src):
-            ri_child = soup.new_tag("ri:url", attrs={'ri:value': src})
+            ri_child = self.soup.new_tag("ri:url", attrs={'ri:value': src})
         else:
             path = Path(src)
             # Logic to prefer PNG over SVG
@@ -527,38 +496,38 @@ class ConfluenceStorageFormatConverter:
 
             self.images.append(path)
             image_name = attachment_name(path)
-            ri_child = soup.new_tag("ri:attachment", attrs={'ri:filename': image_name})
+            ri_child = self.soup.new_tag("ri:attachment", attrs={'ri:filename': image_name})
 
         ac_image.append(ri_child)
 
         # Add caption if alt text exists
         if img_tag.has_attr('alt'):
-            caption_tag = soup.new_tag("ac:caption")
-            p_tag = soup.new_tag("p")
+            caption_tag = self.soup.new_tag("ac:caption")
+            p_tag = self.soup.new_tag("p")
             p_tag.string = img_tag['alt']
             caption_tag.append(p_tag)
             ac_image.append(caption_tag)
 
         return ac_image
 
-    def _transform_paragraph_images(self, soup: BeautifulSoup):
+    def _transform_paragraph_images(self):
         """Transforms <p><img></p> into a single <ac:image> block."""
-        for p_tag in soup.find_all("p"):
+        for p_tag in self.soup.find_all("p"):
             # Find paragraphs containing only an image tag and whitespace
             meaningful_children = [c for c in p_tag.children if isinstance(c, Tag)]
             if len(meaningful_children) == 1 and meaningful_children[0].name == 'img':
-                ac_image = self._create_ac_image_tag(soup, meaningful_children[0])
+                ac_image = self._create_ac_image_tag(meaningful_children[0])
                 p_tag.replace_with(ac_image)
 
-    def _transform_images(self, soup: BeautifulSoup):
+    def _transform_images(self):
         """Transforms standalone <img> tags."""
-        for img_tag in soup.find_all("img"):
-            ac_image = self._create_ac_image_tag(soup, img_tag)
+        for img_tag in self.soup.find_all("img"):
+            ac_image = self._create_ac_image_tag(img_tag)
             img_tag.replace_with(ac_image)
 
-    def _transform_code_blocks(self, soup: BeautifulSoup):
+    def _transform_code_blocks(self):
         """Converts <pre><code> blocks into Confluence code macros."""
-        for pre_tag in soup.find_all("pre"):
+        for pre_tag in self.soup.find_all("pre"):
             code_tag = pre_tag.find("code")
             if not code_tag:
                 continue
@@ -574,29 +543,29 @@ class ConfluenceStorageFormatConverter:
                     image_filename = f"embedded_{image_hash}.{self.options.diagram_output_format}"
                     self.embedded_images[image_filename] = image_data
 
-                    new_tag = soup.new_tag("ac:image")
-                    ri_attachment = soup.new_tag("ri:attachment", attrs={'ri:filename': image_filename})
+                    new_tag = self.soup.new_tag("ac:image")
+                    ri_attachment = self.soup.new_tag("ri:attachment", attrs={'ri:filename': image_filename})
                     new_tag.append(ri_attachment)
                 else:
                     # Diagram macro for live rendering in Confluence
-                    new_tag = self._create_macro(soup, "macro-diagram", {"syntax": "Mermaid"}, content)
+                    new_tag = self._create_macro(self.soup, "macro-diagram", {"syntax": "Mermaid"}, content)
             else:
                 # Standard code block macro
                 params = {'language': language, 'theme': 'Default'}
-                new_tag = self._create_macro(soup, "code", params, content)
+                new_tag = self._create_macro(self.soup, "code", params, content)
 
             pre_tag.replace_with(new_tag)
 
-    def _transform_toc(self, soup: BeautifulSoup):
+    def _transform_toc(self):
         """Transforms a [TOC] placeholder into a Confluence TOC macro."""
-        for p_tag in soup.find_all("p"):
+        for p_tag in self.soup.find_all("p"):
             if p_tag.get_text(strip=True) in ["[TOC]", "[[TOC]]"]:
-                toc_macro = self._create_macro(soup, "toc", {"style": "default"})
+                toc_macro = self._create_macro(self.soup, "toc", {"style": "default"})
                 p_tag.replace_with(toc_macro)
 
-    def _transform_admonitions(self, soup: BeautifulSoup):
+    def _transform_admonitions(self):
         """Transforms admonition divs into info/note/warning macros."""
-        for div in soup.find_all("div", class_="admonition"):
+        for div in self.soup.find_all("div", class_="admonition"):
             class_list = div.get('class', [])
             admonition_type = next((c for c in class_list if c in ["info", "tip", "note", "warning"]), None)
             if not admonition_type:
@@ -608,16 +577,16 @@ class ConfluenceStorageFormatConverter:
                 params['title'] = title_p.get_text(strip=True)
                 title_p.decompose() # Remove the title paragraph
 
-            macro = self._create_macro(soup, admonition_type, params)
+            macro = self._create_macro(self.soup, admonition_type, params)
             # Move remaining content into the rich text body
-            macro_body = soup.new_tag("ac:rich-text-body")
+            macro_body = self.soup.new_tag("ac:rich-text-body")
             macro_body.extend(div.contents)
             macro.append(macro_body)
             div.replace_with(macro)
 
-    def _transform_alerts(self, soup: BeautifulSoup):
+    def _transform_alerts(self):
         """Transforms GitHub/GitLab style blockquote alerts."""
-        for bq in soup.find_all("blockquote"):
+        for bq in self.soup.find_all("blockquote"):
             p_tag = bq.find("p")
             if not p_tag or not p_tag.text:
                 continue
@@ -645,19 +614,19 @@ class ConfluenceStorageFormatConverter:
                 if first_text_node:
                     first_text_node.replace_with(first_text_node.string.lstrip()[skip:])
 
-                macro = self._create_macro(soup, class_name)
+                macro = self._create_macro(self.soup, class_name)
                 print(p_tag)
                 print(bq.contents)
                 # Move remaining content into the rich text body
-                macro_body = soup.new_tag("ac:rich-text-body")
+                macro_body = self.soup.new_tag("ac:rich-text-body")
                 macro_body.extend(bq.contents)
                 macro.append(macro_body)
 
                 bq.replace_with(macro)
 
-    def _transform_sections(self, soup: BeautifulSoup):
+    def _transform_sections(self):
         """Transforms <details><summary> sections into expand macros."""
-        for details in soup.find_all("details"):
+        for details in self.soup.find_all("details"):
             summary = details.find("summary")
             if not summary:
                 continue
@@ -665,15 +634,15 @@ class ConfluenceStorageFormatConverter:
             title = summary.get_text(strip=True)
             summary.decompose() # Remove summary from content
 
-            macro = self._create_macro(soup, "expand", {"title": title})
+            macro = self._create_macro(self.soup, "expand", {"title": title})
             macro.find("ac:rich-text-body").extend(details.contents)
             details.replace_with(macro)
 
-    def _transform_emojis(self, soup: BeautifulSoup):
+    def _transform_emojis(self):
         """Transforms emoji spans into emoticons."""
-        for span in soup.find_all("span", attrs={'data-emoji-shortname': True}):
+        for span in self.soup.find_all("span", attrs={'data-emoji-shortname': True}):
             shortname = span['data-emoji-shortname']
-            emoticon = soup.new_tag("ac:emoticon", attrs={
+            emoticon = self.soup.new_tag("ac:emoticon", attrs={
                 'ac:name': shortname,
                 'ac:emoji-shortname': f":{shortname}:",
                 'ac:emoji-id': span.get('data-emoji-unicode', ''),
@@ -681,9 +650,9 @@ class ConfluenceStorageFormatConverter:
             })
             span.replace_with(emoticon)
 
-    def _transform_paragraphs(self, soup: BeautifulSoup):
+    def _transform_paragraphs(self):
         """Transforms paragraphs to remove newline characters"""
-        for p in soup.find_all("p"):
+        for p in self.soup.find_all("p"):
             for child in p.children:
                 if isinstance(child, NavigableString):
                     new_text = child.replace("\n", "")
@@ -806,21 +775,10 @@ class ConfluenceDocument:
         if generated_by is not None:
             generated_by_html = markdown_to_html(generated_by)
 
-            content = [
-                '<ac:structured-macro ac:name="info" ac:schema-version="1">',
-                f"<ac:rich-text-body>{generated_by_html}</ac:rich-text-body>",
-                "</ac:structured-macro>",
-                html,
-            ]
-        else:
-            content = [html]
+            html= f'<ac:structured-macro ac:name="info" ac:schema-version="1"><ac:rich-text-body>{generated_by_html}</ac:rich-text-body></ac:structured-macro>'+html
 
-        try:
-            self.root = elements_from_strings(content)
-        except ParseError as ex:
-            raise ConversionError(path) from ex
 
-        converter = ConfluenceStorageFormatConverter(
+        self.converter = ConfluenceStorageFormatConverter(
             ConfluenceConverterOptions(
                 ignore_invalid_url=self.options.ignore_invalid_url,
                 heading_anchors=self.options.heading_anchors,
@@ -833,16 +791,16 @@ class ConfluenceDocument:
             site_metadata,
             page_metadata,
         )
-        converter.visit(self.root)
-        self.links = converter.links
-        self.images = converter.images
-        self.embedded_images = converter.embedded_images
+        self.converter.convert(html)
+        self.images = self.converter.images
+        self.links = self.converter.links
+        self.embedded_images = self.converter.embedded_images
 
-        self.title = document.title or converter.toc.get_title()
+        self.title = document.title or self.converter.toc.get_title()
         self.labels = document.tags
 
     def xhtml(self) -> str:
-        return elements_to_string(self.root)
+        return str(self.converter.soup)
 
 
 def attachment_name(name: Union[Path, str]) -> str:
