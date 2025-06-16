@@ -11,6 +11,7 @@ import logging
 import os.path
 import re
 import shutil
+import string
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,6 +106,7 @@ def markdown_to_html(content: str) -> str:
         "--from=gfm+hard_line_breaks+wikilinks_title_after_pipe",
         "--to=html",
         "--mathjax",
+        "--no-highlight",
         f"--lua-filter={pandoc_filters_dir / 'highlight.lua'}",
         f"--lua-filter={pandoc_filters_dir / 'wikilink-image-filter.lua'}",
     ]
@@ -216,6 +218,41 @@ def title_to_identifier(title: str) -> str:
 def element_to_text(element: Tag) -> str:
     """Gets all text from a BeautifulSoup tag."""
     return element.get_text(strip=True)
+
+
+def is_rtl(text: Optional[str]) -> Optional[bool]:
+    """ "returns whether a text is rtl. returns True for rtl, False for ltr, and None for unspecified"""
+    if text is None:
+        return None
+    for c in text:
+        if c in string.ascii_letters:
+            return False
+        if c in "אבגדהוזחטיכךלמםנןסעפףצץקרשת":
+            return True
+    return None
+
+
+def set_direction_style(tag: Tag, rtl: Optional[bool]) -> None:
+    if rtl:
+        tag["style"] = "direction: rtl; text-align: right;"
+    else:
+        # if rtl is None: default is ltr
+        tag["style"] = "direction: ltr; text-align: left;"
+
+
+def is_inline(element: PageElement) -> bool:
+    if not isinstance(element, Tag):
+        assert isinstance(element, NavigableString)
+        return True
+    if element.name == "code":
+        return True
+    if element.name == "span":
+        if not element.has_attr("class") or list(element["class"]) != [
+            "math",
+            "display",
+        ]:
+            return True
+    return False
 
 
 @dataclass
@@ -688,6 +725,30 @@ class ConfluenceStorageFormatConverter:
 
                     # TODO: Get rid of the `NavigableString` cast when https://bugs.launchpad.net/beautifulsoup/+bug/2114746 is resolved
                     child.replace_with(NavigableString(new_text))
+
+            rtl = None
+            new_ps = [self.soup.new_tag("p")]
+            is_new_line = False
+            for child in list(p.children):
+                assert isinstance(child, (Tag, NavigableString))
+                child_rtl = is_rtl(child.string)
+                is_new_line = is_new_line or not is_inline(child)
+                if rtl is None:
+                    rtl = child_rtl
+                elif child_rtl is None or rtl == child_rtl or (not is_new_line):
+                    pass
+                else:
+                    set_direction_style(new_ps[-1], rtl)
+                    last_tag = new_ps[-1].contents[-1]
+                    if isinstance(last_tag, Tag) and last_tag.name == "br":
+                        new_ps[-1].contents.pop()
+                    new_ps.append(self.soup.new_tag("p"))
+
+                    is_new_line = False
+                    rtl = child_rtl
+                new_ps[-1].append(child)
+            set_direction_style(new_ps[-1], rtl)
+            p.replace_with(*new_ps)
 
     def _transform_math(self) -> None:
         for math_inline in bs4_find_all(
