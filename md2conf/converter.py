@@ -311,7 +311,7 @@ class ConfluenceStorageFormatConverter:
         name: str,
         params: Optional[dict[str, str]] = None,
         plain_text_body: Optional[str] = None,
-        rich_text_body = Optional[list[PageElement]] = None,
+        rich_text_body: Optional[list[PageElement]] = None,
     ) -> Tag:
         """Helper to create a generic Confluence <ac:structured-macro>."""
         macro = self.soup.new_tag("ac:structured-macro")
@@ -333,7 +333,7 @@ class ConfluenceStorageFormatConverter:
         if rich_text_body is not None:
             rich_body_tag = self.soup.new_tag("ac:rich-text-body")
             rich_body_tag.extend(rich_text_body)
-            macro.append(rich_text_body)
+            macro.append(rich_body_tag)
 
         return macro
 
