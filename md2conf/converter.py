@@ -307,25 +307,24 @@ class ConfluenceStorageFormatConverter:
 
     def _create_macro(
         self,
-        soup: BeautifulSoup,
         name: str,
         params: Optional[dict[str, str]] = None,
         plain_text_body: Optional[str] = None,
     ) -> Tag:
         """Helper to create a generic Confluence <ac:structured-macro>."""
-        macro = soup.new_tag("ac:structured-macro")
+        macro = self.soup.new_tag("ac:structured-macro")
         macro["ac:name"] = name
         macro["ac:schema-version"] = "1"
 
         if params:
             for key, value in params.items():
-                param_tag = soup.new_tag("ac:parameter")
+                param_tag = self.soup.new_tag("ac:parameter")
                 param_tag["ac:name"] = key
                 param_tag.string = value
                 macro.append(param_tag)
 
         if plain_text_body is not None:
-            body_tag = soup.new_tag("ac:plain-text-body")
+            body_tag = self.soup.new_tag("ac:plain-text-body")
             body_tag.append(CData(plain_text_body))
             macro.append(body_tag)
 
@@ -341,7 +340,7 @@ class ConfluenceStorageFormatConverter:
 
             if self.options.heading_anchors:
                 anchor_id = title_to_identifier(title)
-                anchor_macro = self._create_macro(self.soup, "anchor", {"": anchor_id})
+                anchor_macro = self._create_macro("anchor", {"": anchor_id})
                 heading.insert(0, anchor_macro)
 
     def _transform_links(self):
@@ -504,13 +503,12 @@ class ConfluenceStorageFormatConverter:
                     new_tag.append(ri_attachment)
                 else:
                     # Diagram macro for live rendering in Confluence
-                    new_tag = self._create_macro(
-                        self.soup, "macro-diagram", {"syntax": "Mermaid"}, content
+                    new_tag = self._create_macro("macro-diagram", {"syntax": "Mermaid"}, content
                     )
             else:
                 # Standard code block macro
                 params = {"language": language, "theme": "Default"}
-                new_tag = self._create_macro(self.soup, "code", params, content)
+                new_tag = self._create_macro("code", params, content)
 
             pre_tag.replace_with(new_tag)
 
@@ -518,7 +516,7 @@ class ConfluenceStorageFormatConverter:
         """Transforms a [TOC] placeholder into a Confluence TOC macro."""
         for p_tag in self.soup.find_all("p"):
             if p_tag.get_text(strip=True) in ["[TOC]", "[[TOC]]"]:
-                toc_macro = self._create_macro(self.soup, "toc", {"style": "default"})
+                toc_macro = self._create_macro("toc", {"style": "default"})
                 p_tag.replace_with(toc_macro)
 
     def _transform_admonitions(self):
@@ -537,7 +535,7 @@ class ConfluenceStorageFormatConverter:
                 params["title"] = title_p.get_text(strip=True)
                 title_p.decompose()  # Remove the title paragraph
 
-            macro = self._create_macro(self.soup, admonition_type, params)
+            macro = self._create_macro(admonition_type, params)
             # Move remaining content into the rich text body
             macro_body = self.soup.new_tag("ac:rich-text-body")
             macro_body.extend(div.contents)
@@ -585,7 +583,7 @@ class ConfluenceStorageFormatConverter:
                 if first_text_node:
                     first_text_node.replace_with(first_text_node.string.lstrip()[skip:])
 
-                macro = self._create_macro(self.soup, class_name)
+                macro = self._create_macro(class_name)
                 print(p_tag)
                 print(bq.contents)
                 # Move remaining content into the rich text body
@@ -605,7 +603,7 @@ class ConfluenceStorageFormatConverter:
             title = summary.get_text(strip=True)
             summary.decompose()  # Remove summary from content
 
-            macro = self._create_macro(self.soup, "expand", {"title": title})
+            macro = self._create_macro("expand", {"title": title})
             macro.find("ac:rich-text-body").extend(details.contents)
             details.replace_with(macro)
 
