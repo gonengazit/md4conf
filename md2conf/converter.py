@@ -304,6 +304,7 @@ class ConfluenceStorageFormatConverter:
         self._transform_sections()
         self._transform_emojis()
         self._transform_paragraphs()
+        self._transform_math()
 
     def _create_macro(
         self,
@@ -503,7 +504,8 @@ class ConfluenceStorageFormatConverter:
                     new_tag.append(ri_attachment)
                 else:
                     # Diagram macro for live rendering in Confluence
-                    new_tag = self._create_macro("macro-diagram", {"syntax": "Mermaid"}, content
+                    new_tag = self._create_macro(
+                        "macro-diagram", {"syntax": "Mermaid"}, content
                     )
             else:
                 # Standard code block macro
@@ -629,6 +631,26 @@ class ConfluenceStorageFormatConverter:
                 if isinstance(child, NavigableString):
                     new_text = child.replace("\n", "")
                     child.replace_with(new_text)
+
+    def _transform_math(self) -> None:
+        for math_inline in self.soup.find_all("span", attrs={"class": "math inline"}):
+            math_macro = self._create_macro(
+                "eazy-math-inline",
+                {"body": math_inline.string.lstrip(" (\\").rstrip("\\) ")},
+            )
+            math_inline.replace_with(math_macro)
+
+        for math_block in self.soup.find_all("span", attrs={"class": "math display"}):
+            math_macro = self._create_macro(
+                "easy-math-block",
+                {
+                    "body": math_block.string.lstrip("\\[ ").rstrip("]\\ "),
+                    "align": "center",
+                },
+            )
+            math_macro["data-layout"] = "default"
+            print(math_macro)
+            math_block.replace_with(math_macro)
 
 
 class DocumentError(RuntimeError):
