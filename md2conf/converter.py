@@ -107,6 +107,7 @@ def markdown_to_html(content: str) -> str:
         "--to=html",
         "--mathjax",
         "--no-highlight",
+        "--wrap=none",
         f"--lua-filter={pandoc_filters_dir / 'highlight.lua'}",
         f"--lua-filter={pandoc_filters_dir / 'wikilink-image-filter.lua'}",
     ]
@@ -756,28 +757,37 @@ class ConfluenceStorageFormatConverter:
                     # TODO: Get rid of the `NavigableString` cast when https://bugs.launchpad.net/beautifulsoup/+bug/2114746 is resolved
                     child.replace_with(NavigableString(new_text))
 
-            rtl = None
-            new_ps = [self.soup.new_tag("p")]
-            is_new_line = False
+            # split children into lines
+            lines = [[]]
             for child in list(p.children):
                 assert isinstance(child, (Tag, NavigableString))
-                child_rtl = is_rtl(child.string)
-                is_new_line = is_new_line or not is_inline(child)
-                if rtl is None:
-                    rtl = child_rtl
-                elif child_rtl is None or rtl == child_rtl or (not is_new_line):
-                    pass
-                else:
-                    set_direction_style(new_ps[-1], rtl)
-                    last_tag = new_ps[-1].contents[-1]
-                    if isinstance(last_tag, Tag) and last_tag.name == "br":
-                        new_ps[-1].contents.pop()
-                    new_ps.append(self.soup.new_tag("p"))
+                lines[-1].append(child)
+                if not is_inline(child):
+                    lines.append([])
+            if not lines[-1]:
+                lines.pop()
 
-                    is_new_line = False
-                    rtl = child_rtl
-                new_ps[-1].append(child)
-            set_direction_style(new_ps[-1], rtl)
+            new_ps = [self.soup.new_tag("p")]
+            last_p_rtl = None
+            for line in lines:
+                line_rtl = None
+                for child in line:
+                    child_rtl = is_rtl(child.string)
+                    if child_rtl is not None:
+                        line_rtl = child_rtl
+                        break
+
+                if line_rtl is not None:
+                    if last_p_rtl is not None and last_p_rtl != line_rtl:
+                        last_tag = new_ps[-1].contents[-1]
+                        if last_tag.name == "br":
+                            new_ps[-1].contents.pop()
+                        new_ps.append(self.soup.new_tag("p"))
+                    last_p_rtl = line_rtl
+                new_ps[-1].extend(line)
+
+                set_direction_style(new_ps[-1], last_p_rtl)
+
             p.replace_with(*new_ps)
 
     def _transform_math(self) -> None:
