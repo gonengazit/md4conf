@@ -668,16 +668,33 @@ class ConfluenceStorageFormatConverter:
             class_name, skip = None, 0
 
             # GitHub: [!NOTE]
-            gh_match = re.match(r"^\[!([A-Z]+)\]\s*", p_tag.text.lstrip())
+            gh_match = re.match(r"^\[!([A-Za-z]+)\][\+\-]?\s*", p_tag.text.lstrip())
             if gh_match:
                 alert_map = {
-                    "NOTE": "note",
+                    "NOTE": "info",
+                    "ABSTRACT": "info",
+                    "SUMMARY": "info",
+                    "TLDR": "info",
+                    "INFO": "info",
+                    "TODO": "info",
+                    "EXAMPLE": "info",
                     "TIP": "tip",
-                    "IMPORTANT": "info",
-                    "WARNING": "warning",
-                    "CAUTION": "warning",
+                    "HINT": "tip",
+                    "IMPORTANT": "tip",
+                    "SUCCESS": "tip",
+                    "CHECK": "tip",
+                    "DONE": "tip",
+                    "WARNING": "note",
+                    "CAUTION": "note",
+                    "ATTENTION": "note",
+                    "FAILURE": "warning",
+                    "FAIL": "warning",
+                    "MISSING": "warning",
+                    "DANGER": "warning",
+                    "ERROR": "warning",
+                    "BUG": "warning",
                 }
-                class_name = alert_map.get(gh_match.group(1))
+                class_name = alert_map.get(gh_match.group(1).upper(), "info")
                 skip = len(gh_match.group(0))
 
             # GitLab: NOTE:
@@ -703,10 +720,11 @@ class ConfluenceStorageFormatConverter:
                     # Gal: Should always be true due to the find filter...
                     assert string is not None
 
-                    # TODO: Get rid of the `NavigableString` cast when https://bugs.launchpad.net/beautifulsoup/+bug/2114746 is resolved
-                    first_text_node.replace_with(
-                        NavigableString(string.lstrip()[skip:])
+                    title_stripped = self.soup.new_tag(
+                        "strong", string=string.lstrip()[skip:]
                     )
+
+                    first_text_node.replace_with(title_stripped)
 
                 macro = self._create_macro(class_name, rich_text_body=bq.contents)
 
