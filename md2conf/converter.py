@@ -240,11 +240,39 @@ def set_direction_style(tag: Tag, rtl: Optional[bool]) -> None:
         tag["style"] = "direction: ltr; text-align: left;"
 
 
+INLINE_ELEMENTS = {
+    "a",
+    "abbr",
+    "acronym",
+    "b",
+    "bdo",
+    "big",
+    "button",
+    "cite",
+    "code",
+    "dfn",
+    "em",
+    "i",
+    "input",
+    "kbd",
+    "label",
+    "q",
+    "samp",
+    "select",
+    "small",
+    "strong",
+    "sub",
+    "sup",
+    "time",
+    "var",
+}
+
+
 def is_inline(element: PageElement) -> bool:
     if not isinstance(element, Tag):
         assert isinstance(element, NavigableString)
         return True
-    if element.name == "code":
+    if element.name in INLINE_ELEMENTS:
         return True
     if element.name == "span":
         if not element.has_attr("class") or list(element["class"]) != [
@@ -414,6 +442,8 @@ class ConfluenceStorageFormatConverter:
                 anchor_id = title_to_identifier(title)
                 anchor_macro = self._create_macro("anchor", {"": anchor_id})
                 heading.insert(0, anchor_macro)
+
+            set_direction_style(heading, is_rtl(title))
 
     def _transform_links(self) -> None:
         """Converts relative page links to Confluence web links."""
