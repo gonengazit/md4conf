@@ -468,7 +468,7 @@ class ConfluenceStorageFormatConverter:
                 and not relative_url.query
             ):
                 if self.options.heading_anchors:
-                    target = relative_url.fragment.lstrip("#")
+                    target = title_to_identifier(relative_url.fragment.lstrip("#"))
                     link_wrapper = self.soup.new_tag(
                         "ac:link", attrs={"ac:anchor": target}
                     )
