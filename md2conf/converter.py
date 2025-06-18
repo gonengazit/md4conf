@@ -438,30 +438,27 @@ class ConfluenceStorageFormatConverter:
         link_parts = link_path.parts
 
         for path, metadata in self.page_metadata.items():
-            if path.parts[-len(link_parts):] == link_parts:
+            if path.parts[-len(link_parts) :] == link_parts:
                 return metadata
         return None
 
     def _find_wikilink_attachment(self, src: str) -> Optional[Path]:
         """find an image matching the path in the base directory"""
         src_path = Path(src)
-        if (self.base_dir/src_path).exists():
+        if (self.base_dir / src_path).exists():
             return src_path
 
         LOGGER.debug(f"looking for wikilink attachment {src_path}")
 
-        for dirpath,_,filenames in os.walk(self.base_dir):
+        for dirpath, _, filenames in os.walk(self.base_dir):
             for filename in filenames:
-                file_path = Path(dirpath)/filename
-                if src_path.parts == file_path.parts[-len(src_path.parts):]:
+                file_path = Path(dirpath) / filename
+                if src_path.parts == file_path.parts[-len(src_path.parts) :]:
                     logging.debug(f"found {filename} in directory {dirpath}")
-                    return Path(dirpath)/filename
+                    return Path(dirpath) / filename
 
         LOGGER.error(f"Couldn't find attachment {src_path}")
         return None
-
-
-
 
     def _transform_links(self) -> None:
         """Converts relative page links to Confluence web links."""
@@ -502,7 +499,7 @@ class ConfluenceStorageFormatConverter:
                     raise DocumentError(f"Link {url} points outside project root.")
 
                 link_metadata = self.page_metadata.get(absolute_path)
-                if not link_metadata and anchor["title"]=="wikilink":
+                if not link_metadata and anchor["title"] == "wikilink":
                     link_metadata = self._resolve_wikilink(relative_url.path)
                 if not link_metadata:
                     raise DocumentError(f"No page metadata found for link: {url}")
@@ -572,7 +569,6 @@ class ConfluenceStorageFormatConverter:
                     return self.soup.new_tag("br")
                 else:
                     raise DocumentError(f"couldn't upload image with path {src}")
-
 
             # Logic to prefer PNG over SVG
             if path.suffix == ".svg":

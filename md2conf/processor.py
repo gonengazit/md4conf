@@ -201,7 +201,7 @@ class Processor:
                 files.remove(parent_doc)
 
             # promote Markdown document in directory as parent page in Confluence
-            node = self._index_file(parent_doc, is_parent = True)
+            node = self._index_file(parent_doc, is_parent=True)
             if parent is not None:
                 parent.add_child(node)
             parent = node
@@ -223,7 +223,9 @@ class Processor:
 
         return parent
 
-    def _index_file(self, path: Path, is_parent: Optional[bool] = False) -> DocumentNode:
+    def _index_file(
+        self, path: Path, is_parent: Optional[bool] = False
+    ) -> DocumentNode:
         """
         Indexes a single Markdown file.
         """

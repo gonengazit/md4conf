@@ -89,10 +89,14 @@ class SynchronizingProcessor(Processor):
             parent_page = self.api.get_page_properties(parent_id.page_id)
             while True:
                 try:
-                    page = self.api.get_page_properties_by_title(node.title, space_id=parent_page.spaceId)
+                    page = self.api.get_page_properties_by_title(
+                        node.title, space_id=parent_page.spaceId
+                    )
                     # page name collision!
                     if page.parentId != parent_id.page_id:
-                        LOGGER.info(f"A page with title: {node.title} already exists in the space. pick a different title:")
+                        LOGGER.info(
+                            f"A page with title: {node.title} already exists in the space. pick a different title:"
+                        )
                         node.title = input("> ")
                     else:
                         break
