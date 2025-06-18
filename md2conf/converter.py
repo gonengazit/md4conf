@@ -776,7 +776,7 @@ class ConfluenceStorageFormatConverter:
                     child.replace_with(NavigableString(new_text))
 
             # split children into lines
-            lines = [[]]
+            lines: list[list[Tag | NavigableString]] = [[]]
             for child in list(p.children):
                 assert isinstance(child, (Tag, NavigableString))
                 lines[-1].append(child)
@@ -797,8 +797,8 @@ class ConfluenceStorageFormatConverter:
 
                 if line_rtl is not None:
                     if last_p_rtl is not None and last_p_rtl != line_rtl:
-                        last_tag = new_ps[-1].contents[-1]
-                        if last_tag.name == "br":
+                        last_element = new_ps[-1].contents[-1]
+                        if isinstance(last_element, Tag) and last_element.name == "br":
                             new_ps[-1].contents.pop()
                         new_ps.append(self.soup.new_tag("p"))
                     last_p_rtl = line_rtl
