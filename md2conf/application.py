@@ -17,6 +17,7 @@ from .converter import (
     ConfluencePageID,
     attachment_name,
 )
+from .extra import override
 from .metadata import ConfluencePageMetadata
 from .processor import Converter, DocumentNode, Processor, ProcessorFactory
 from .properties import ConfluenceError, PageError

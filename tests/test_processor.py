@@ -14,6 +14,7 @@ from typing import Optional, override
 from unittest.util import safe_repr
 
 from md2conf.converter import ConfluenceDocumentOptions, ConfluencePageID
+from md2conf.extra import override
 from md2conf.local import LocalConverter
 from md2conf.metadata import ConfluenceSiteMetadata
 

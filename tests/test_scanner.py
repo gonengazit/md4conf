@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from typing import override
 
+from md2conf.extra import override
 from md2conf.scanner import Scanner
 
 logging.basicConfig(

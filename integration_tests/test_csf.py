@@ -14,6 +14,7 @@ from typing import override
 
 from md2conf.api import ConfluenceAPI, ConfluenceLabel
 from md2conf.converter import content_to_string
+from md2conf.extra import override
 
 TEST_SPACE = "~hunyadi"
 TEST_PAGE_ID = "65713"

@@ -23,6 +23,7 @@ from md2conf.converter import (
     ConfluencePageID,
     sanitize_confluence,
 )
+from md2conf.extra import override
 from md2conf.metadata import ConfluenceSiteMetadata
 from md2conf.scanner import Scanner
 
@@ -67,8 +68,8 @@ class TestAPI(unittest.TestCase):
 
     def test_find_page_by_title(self) -> None:
         with ConfluenceAPI() as api:
-            page_properties = api.get_page_properties_by_title(TEST_PAGE_TITLE)
-            self.assertEqual(page_properties.id, TEST_PAGE_ID.page_id)
+            page = api.get_page_properties_by_title(TEST_PAGE_TITLE)
+            self.assertEqual(page.id, TEST_PAGE_ID.page_id)
 
     def test_get_page(self) -> None:
         with ConfluenceAPI() as api:

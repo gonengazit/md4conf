@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, override
 
 from .converter import ConfluenceDocument, ConfluenceDocumentOptions, ConfluencePageID
+from .extra import override
 from .metadata import ConfluencePageMetadata, ConfluenceSiteMetadata
 from .processor import Converter, DocumentNode, Processor, ProcessorFactory
 

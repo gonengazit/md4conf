@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 from typing import override
 
+from md2conf.extra import override
 from md2conf.mermaid import has_mmdc, render_diagram
 
 logging.basicConfig(
