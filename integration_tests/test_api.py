@@ -67,8 +67,8 @@ class TestAPI(unittest.TestCase):
 
     def test_find_page_by_title(self) -> None:
         with ConfluenceAPI() as api:
-            page_id = api.get_page_id_by_title(TEST_PAGE_TITLE)
-            self.assertEqual(page_id, TEST_PAGE_ID.page_id)
+            page_properties = api.get_page_properties_by_title(TEST_PAGE_TITLE)
+            self.assertEqual(page_properties.id, TEST_PAGE_ID.page_id)
 
     def test_get_page(self) -> None:
         with ConfluenceAPI() as api:

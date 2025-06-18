@@ -651,13 +651,13 @@ class ConfluenceSession:
         LOGGER.info("Updating attachment: %s", attachment_id)
         self._save(ConfluenceVersion.VERSION_1, path, object_to_json(request))
 
-    def get_page_id_by_title(
+    def get_page_properties_by_title(
         self,
         title: str,
         *,
         space_id: Optional[str] = None,
         space_key: Optional[str] = None,
-    ) -> str:
+    ) -> ConfluencePageProperties:
         """
         Looks up a Confluence wiki page ID by title.
 
@@ -683,7 +683,7 @@ class ConfluenceSession:
             raise ConfluenceError(f"unique page not found with title: {title}")
 
         page = _json_to_object(ConfluencePageProperties, results[0])
-        return page.id
+        return page
 
     def get_page(self, page_id: str) -> ConfluencePage:
         """
