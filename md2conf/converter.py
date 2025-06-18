@@ -24,7 +24,7 @@ from bs4.element import AttributeValueList, NavigableString, PageElement
 
 from .collection import ConfluencePageCollection
 from .mermaid import render_diagram
-from .metadata import ConfluenceSiteMetadata
+from .metadata import ConfluenceSiteMetadata, ConfluencePageMetadata
 from .properties import PageError
 from .scanner import ScannedDocument, Scanner
 
@@ -430,6 +430,20 @@ class ConfluenceStorageFormatConverter:
 
             set_direction_style(heading, is_rtl(title))
 
+    def _resolve_wikilink(self, link: str) -> Optional[ConfluencePageMetadata]:
+        link_path = Path(link)
+        if link_path.suffix != ".md":
+            link_path = link_path.with_suffix(".md")
+
+        link_parts = link_path.parts
+
+        for path, metadata in self.page_metadata.items():
+            if path.parts[-len(link_parts):] == link_parts:
+                return metadata
+        return None
+
+
+
     def _transform_links(self) -> None:
         """Converts relative page links to Confluence web links."""
 
@@ -464,11 +478,13 @@ class ConfluenceStorageFormatConverter:
 
             # Handle links to other pages
             try:
-                absolute_path = (self.base_dir / relative_url.path).resolve(strict=True)
+                absolute_path = (self.base_dir / relative_url.path).resolve()
                 if not str(absolute_path).startswith(str(self.root_dir)):
                     raise DocumentError(f"Link {url} points outside project root.")
 
                 link_metadata = self.page_metadata.get(absolute_path)
+                if not link_metadata and anchor["title"]=="wikilink":
+                    link_metadata = self._resolve_wikilink(relative_url.path)
                 if not link_metadata:
                     raise DocumentError(f"No page metadata found for link: {url}")
 
