@@ -442,6 +442,25 @@ class ConfluenceStorageFormatConverter:
                 return metadata
         return None
 
+    def _find_wikilink_attachment(self, src: str) -> Optional[Path]:
+        """find an image matching the path in the base directory"""
+        src_path = Path(src)
+        if (self.base_dir/src_path).exists():
+            return src_path
+
+        LOGGER.debug(f"looking for wikilink attachment {src_path}")
+
+        for dirpath,_,filenames in os.walk(self.base_dir):
+            for filename in filenames:
+                file_path = Path(dirpath)/filename
+                if src_path.parts == file_path.parts[-len(src_path.parts):]:
+                    logging.debug(f"found {filename} in directory {dirpath}")
+                    return Path(dirpath)/filename
+
+        LOGGER.error(f"Couldn't find attachment {src_path}")
+        return None
+
+
 
 
     def _transform_links(self) -> None:
@@ -525,7 +544,10 @@ class ConfluenceStorageFormatConverter:
                     raise
 
     def _create_ac_image_tag(self, img_tag: Tag) -> Tag:
-        """Helper to create a Confluence <ac:image> tag from an HTML <img> tag."""
+        """Helper to create a Confluence <ac:image> tag from an HTML <img> tag.
+
+        If the image path doesn't exist but ignore_invalid_url is True - will just return a <br/> tag
+        """
         src = img_tag.get("src")
         if not src or not isinstance(src, str):
             raise DocumentError("Image lacks 'src' attribute.")
@@ -539,7 +561,19 @@ class ConfluenceStorageFormatConverter:
         if is_absolute_url(src):
             ri_child = self.soup.new_tag("ri:url", attrs={"ri:value": src})
         else:
-            path = Path(src)
+            if img_tag["title"] == "wikilink":
+                path = self._find_wikilink_attachment(src)
+            else:
+                path = Path(src)
+
+            if path is None or not (self.base_dir / path).exists():
+                if self.options.ignore_invalid_url:
+                    logging.error(f"couldn't upload image with path {src}")
+                    return self.soup.new_tag("br")
+                else:
+                    raise DocumentError(f"couldn't upload image with path {src}")
+
+
             # Logic to prefer PNG over SVG
             if path.suffix == ".svg":
                 png_file = path.with_suffix(".png")
