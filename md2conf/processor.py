@@ -201,7 +201,7 @@ class Processor:
                 files.remove(parent_doc)
 
             # promote Markdown document in directory as parent page in Confluence
-            node = self._index_file(parent_doc)
+            node = self._index_file(parent_doc, is_parent = True)
             if parent is not None:
                 parent.add_child(node)
             parent = node
@@ -223,7 +223,7 @@ class Processor:
 
         return parent
 
-    def _index_file(self, path: Path) -> DocumentNode:
+    def _index_file(self, path: Path, is_parent: Optional[bool] = False) -> DocumentNode:
         """
         Indexes a single Markdown file.
         """
@@ -233,12 +233,18 @@ class Processor:
         # extract information from a Markdown document found in a local directory.
         document = Scanner().read(path)
 
-        return DocumentNode(
+        node = DocumentNode(
             absolute_path=path,
             page_id=document.page_id,
             space_key=document.space_key,
             title=document.title,
         )
+        if is_parent:
+            # the page title of an index.md file should be the directory named
+            node.title = node.title or path.parent.name
+        else:
+            node.title = node.title or path.stem
+        return node
 
     def _generate_hash(self, absolute_path: Path) -> str:
         """

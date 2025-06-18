@@ -19,7 +19,7 @@ from .converter import (
 )
 from .metadata import ConfluencePageMetadata
 from .processor import Converter, DocumentNode, Processor, ProcessorFactory
-from .properties import PageError
+from .properties import PageError, ConfluenceError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -82,18 +82,27 @@ class SynchronizingProcessor(Processor):
     ) -> None:
         if node.page_id is not None:
             # verify if page exists
-            page = self.api.get_page_properties(parent_id.page_id)
+            page = self.api.get_page_properties(node.page_id)
             update = False
         elif node.title is not None:
             # look up page by title
-            page = self.api.get_or_create_page(node.title, parent_id.page_id)
+            parent_page = self.api.get_page_properties(parent_id.page_id)
+            while True:
+                try:
+                    page = self.api.get_page_properties_by_title(node.title, space_id=parent_page.spaceId)
+                    # page name collision!
+                    if page.parentId != parent_id.page_id:
+                        LOGGER.info(f"A page with title: {node.title} already exists in the space. pick a different title:")
+                        node.title = input("> ")
+                    else:
+                        break
+
+                except ConfluenceError:
+                    # the title is free- so let's create the page
+                    page = self.api.create_page(parent_id.page_id, node.title, "")
             update = True
         else:
-            # always create a new page
-            digest = self._generate_hash(node.absolute_path)
-            title = f"{node.absolute_path.stem} [{digest}]"
-            page = self.api.create_page(parent_id.page_id, title, "")
-            update = True
+            raise PageError("page should have title, or id for the root page!")
 
         space_key = self.api.space_id_to_key(page.spaceId)
         if update:

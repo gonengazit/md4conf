@@ -308,22 +308,6 @@ class TableOfContents:
 
         self.headings.append(TableOfContentsEntry(level, text))
 
-    def get_title(self) -> Optional[str]:
-        """
-        Returns a proposed document title (if unique).
-
-        :returns: Title text, or `None` if no unique title can be inferred.
-        """
-
-        for level in range(1, 7):
-            try:
-                (title,) = (item.text for item in self.headings if item.level == level)
-                return title
-            except ValueError:
-                pass
-
-        return None
-
 
 @dataclass
 class ConfluenceConverterOptions:
@@ -833,7 +817,6 @@ class ConfluenceStorageFormatConverter:
                 },
             )
             math_macro["data-layout"] = "default"
-            print(math_macro)
             math_block.replace_with(math_macro)
 
 
@@ -964,7 +947,7 @@ class ConfluenceDocument:
         self.links = self.converter.links
         self.embedded_images = self.converter.embedded_images
 
-        self.title = document.title or self.converter.toc.get_title()
+        self.title = document.title
         self.labels = document.tags
 
     def xhtml(self) -> str:
