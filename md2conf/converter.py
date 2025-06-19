@@ -24,7 +24,7 @@ from bs4.element import AttributeValueList, NavigableString, PageElement
 
 from .collection import ConfluencePageCollection
 from .mermaid import render_diagram
-from .metadata import ConfluenceSiteMetadata, ConfluencePageMetadata
+from .metadata import ConfluencePageMetadata, ConfluenceSiteMetadata
 from .properties import PageError
 from .scanner import ScannedDocument, Scanner
 

@@ -19,7 +19,7 @@ from .converter import (
 )
 from .metadata import ConfluencePageMetadata
 from .processor import Converter, DocumentNode, Processor, ProcessorFactory
-from .properties import PageError, ConfluenceError
+from .properties import ConfluenceError, PageError
 
 LOGGER = logging.getLogger(__name__)
 

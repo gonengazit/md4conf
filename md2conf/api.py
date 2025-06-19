@@ -20,6 +20,7 @@ from typing import Optional, TypeVar
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import requests
+
 from strong_typing.core import JsonType
 from strong_typing.serialization import (
     DeserializerOptions,
