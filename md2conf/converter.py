@@ -110,6 +110,7 @@ def markdown_to_html(content: str) -> str:
         "--wrap=none",
         f"--lua-filter={pandoc_filters_dir / 'highlight.lua'}",
         f"--lua-filter={pandoc_filters_dir / 'wikilink-image-filter.lua'}",
+        f"--lua-filter={pandoc_filters_dir / 'image-resize-filter.lua'}",
     ]
     pandoc = subprocess.Popen(
         cmd,
