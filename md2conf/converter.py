@@ -806,9 +806,8 @@ class ConfluenceStorageFormatConverter:
                     child.replace_with(NavigableString(new_text))
 
             # split children into lines
-            lines: list[list[Tag | NavigableString]] = [[]]
+            lines: list[list[PageElement]] = [[]]
             for child in list(p.children):
-                assert isinstance(child, (Tag, NavigableString))
                 lines[-1].append(child)
                 if not is_inline(child):
                     lines.append([])
