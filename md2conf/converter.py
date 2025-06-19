@@ -216,7 +216,7 @@ def title_to_identifier(title: str) -> str:
     return s
 
 
-def element_to_text(element: Tag) -> str:
+def element_to_text(element: PageElement) -> str:
     """Gets all text from a BeautifulSoup tag."""
     return element.get_text(strip=True)
 
@@ -820,7 +820,7 @@ class ConfluenceStorageFormatConverter:
             for line in lines:
                 line_rtl = None
                 for child in line:
-                    child_rtl = is_rtl(child.string)
+                    child_rtl = is_rtl(element_to_text(child))
                     if child_rtl is not None:
                         line_rtl = child_rtl
                         break
