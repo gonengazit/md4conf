@@ -863,7 +863,8 @@ class ConfluenceStorageFormatConverter:
         for p in bs4_find_all(self.soup, "p"):
             for child in p.children:
                 if isinstance(child, NavigableString):
-                    new_text = child.replace("\n", "")
+                    # newlines in paragraphs corrospond to spaces in normal html
+                    new_text = child.replace("\n", " ")
 
                     # TODO: Get rid of the `NavigableString` cast when https://bugs.launchpad.net/beautifulsoup/+bug/2114746 is resolved
                     child.replace_with(NavigableString(new_text))
