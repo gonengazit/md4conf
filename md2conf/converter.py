@@ -374,6 +374,7 @@ class ConfluenceStorageFormatConverter:
         self._transform_headings()
         self._transform_links()
         self._transform_images()
+        self._transform_embeds()
         self._transform_code_blocks()
         self._transform_toc()
         self._transform_admonitions()
@@ -455,7 +456,7 @@ class ConfluenceStorageFormatConverter:
                 file_path = Path(dirpath) / filename
                 if src_path.parts == file_path.parts[-len(src_path.parts) :]:
                     logging.debug(f"found {filename} in directory {dirpath}")
-                    return Path(dirpath) / filename
+                    return Path(dirpath).relative_to(self.base_dir) / filename
 
         LOGGER.error(f"Couldn't find attachment {src_path}")
         return None
@@ -540,6 +541,40 @@ class ConfluenceStorageFormatConverter:
                 else:
                     raise
 
+    def _resolve_local_path(self, tag: Tag, src: str, asset_type: str) -> Path | None:
+        """Resolves and validates a local file path from a tag's 'src'.
+
+        This helper handles path resolution for both standard paths and wikilinks.
+        It checks if the file exists on disk.
+
+        Args:
+            tag: The BeautifulSoup tag (e.g., <img>, <embed>) containing the src.
+            src: The source path string to resolve.
+            asset_type: A string describing the asset ('image', 'file'), used for logging.
+
+        Returns:
+            A Path object on successful validation.
+            None if the path is invalid and the 'ignore_invalid_url' option is enabled.
+
+        Raises:
+            DocumentError: If the path is invalid and 'ignore_invalid_url' is disabled.
+        """
+        # Step 1: Find the initial path (handles wikilinks)
+        if tag.get("title") == "wikilink":
+            path = self._find_wikilink_attachment(src)
+        else:
+            path = Path(src)
+
+        # Step 2: Validate that the file exists
+        if path is None or not (self.base_dir / path).exists():
+            if self.options.ignore_invalid_url:
+                logging.error(f"Couldn't find {asset_type} at path: {src}")
+                return None  # Signal to the caller to skip this asset
+            else:
+                raise DocumentError(f"Couldn't find {asset_type} at path: {src}")
+
+        return path
+
     def _create_ac_image_tag(self, img_tag: Tag) -> Tag:
         """Helper to create a Confluence <ac:image> tag from an HTML <img> tag.
 
@@ -558,17 +593,9 @@ class ConfluenceStorageFormatConverter:
         if is_absolute_url(src):
             ri_child = self.soup.new_tag("ri:url", attrs={"ri:value": src})
         else:
-            if img_tag["title"] == "wikilink":
-                path = self._find_wikilink_attachment(src)
-            else:
-                path = Path(src)
-
-            if path is None or not (self.base_dir / path).exists():
-                if self.options.ignore_invalid_url:
-                    logging.error(f"couldn't upload image with path {src}")
-                    return self.soup.new_tag("br")
-                else:
-                    raise DocumentError(f"couldn't upload image with path {src}")
+            path = self._resolve_local_path(img_tag, src, "image")
+            if path is None:
+                return self.soup.new_tag("br")
 
             # Logic to prefer PNG over SVG
             if path.suffix == ".svg":
@@ -595,6 +622,36 @@ class ConfluenceStorageFormatConverter:
 
         return ac_image
 
+    def _create_ac_file_tag(self, embed_tag: Tag) -> Tag:
+        """Helper to create a Confluence view_file macro from an HTML <embed> tag.
+
+        If the file path doesn't exist but ignore_invalid_url is True - will just return a <br/> tag
+        """
+        src = embed_tag.get("src")
+        if not src or not isinstance(src, str):
+            raise DocumentError("Embed lacks 'src' attribute.")
+
+        file_tag = self._create_macro("view-file", {"name": ""})
+        # Add attachment or URL element
+        if is_absolute_url(src):
+            ri_child = self.soup.new_tag("ri:url", attrs={"ri:value": src})
+        else:
+            path = self._resolve_local_path(embed_tag, src, "file")
+            if path is None:
+                return self.soup.new_tag("br")
+
+            self.images.append(path)
+            file_name = attachment_name(path)
+            ri_child = self.soup.new_tag(
+                "ri:attachment", attrs={"ri:filename": file_name}
+            )
+
+        name_parameter = file_tag.find("ac:parameter")
+        assert isinstance(name_parameter, Tag)
+        name_parameter.append(ri_child)
+
+        return file_tag
+
     def _transform_paragraph_images(self) -> None:
         """Transforms <p><img></p> into a single <ac:image> block."""
 
@@ -610,6 +667,12 @@ class ConfluenceStorageFormatConverter:
         for img_tag in bs4_find_all(self.soup, "img"):
             ac_image = self._create_ac_image_tag(img_tag)
             img_tag.replace_with(ac_image)
+
+    def _transform_embeds(self) -> None:
+        """Transforms <embed> tags."""
+        for embed_tag in bs4_find_all(self.soup, "embed"):
+            file_tag = self._create_ac_file_tag(embed_tag)
+            embed_tag.replace_with(file_tag)
 
     def _transform_code_blocks(self) -> None:
         """Converts <pre><code> blocks into Confluence code macros."""
