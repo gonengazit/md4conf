@@ -1010,9 +1010,7 @@ class ConfluenceDocument:
             else:
                 raise PageError("missing Confluence page ID")
 
-        return page_id, ConfluenceDocument(
-            path, document, options, root_dir, site_metadata, page_metadata
-        )
+        return page_id, ConfluenceDocument(path, document, options, root_dir, site_metadata, page_metadata)
 
     def __init__(
         self,
