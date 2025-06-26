@@ -83,6 +83,12 @@ def is_relative_url(url: str) -> bool:
     return not bool(urlparts.scheme) and not bool(urlparts.netloc)
 
 
+def is_directory_within(absolute_path: Path, base_path: Path) -> bool:
+    "True if the absolute path is nested within the base path."
+
+    return absolute_path.as_posix().startswith(base_path.as_posix())
+
+
 def encode_title(text: str) -> str:
     "Converts a title string such that it is safe to embed into a Confluence URL."
 
@@ -347,7 +353,10 @@ class ConfluenceStorageFormatConverter:
         root_dir: Path,
         site_metadata: ConfluenceSiteMetadata,
         page_metadata: ConfluencePageCollection,
-    ):
+    ) -> None:
+        path = path.resolve(True)
+        root_dir = root_dir.resolve(True)
+
         self.options = options
         self.path = path
         self.base_dir = path.parent
@@ -500,7 +509,7 @@ class ConfluenceStorageFormatConverter:
             # Handle links to other pages
             try:
                 absolute_path = (self.base_dir / relative_url.path).resolve()
-                if not str(absolute_path).startswith(str(self.root_dir)):
+                if not is_directory_within(absolute_path, self.root_dir):
                     raise DocumentError(f"Link {url} points outside project root.")
 
                 link_metadata = self.page_metadata.get(absolute_path)
@@ -601,14 +610,25 @@ class ConfluenceStorageFormatConverter:
             if path is None:
                 return self.soup.new_tag("br")
 
-            # Logic to prefer PNG over SVG
-            if path.suffix == ".svg":
-                png_file = path.with_suffix(".png")
-                if (self.base_dir / png_file).exists():
-                    path = png_file
+            # resolve relative path into absolute path w.r.t. base dirAdd commentMore actions
+            absolute_path = (self.base_dir / path).resolve(True)
 
-            self.images.append(path)
-            image_name = attachment_name(path)
+            # Logic to prefer PNG over SVG
+            if absolute_path.suffix == ".svg":
+                png_file = absolute_path.with_suffix(".png")
+                if (self.base_dir / png_file).exists():
+                    absolute_path = png_file
+
+            if not is_directory_within(absolute_path, self.root_dir):
+                msg = f"relative path to image {path} points to outside root path: {self.root_dir}"
+                if self.options.ignore_invalid_url:
+                    LOGGER.warning(msg)
+                    image_name = ""
+                else:
+                    raise DocumentError(msg)
+            else:
+                self.images.append(absolute_path)
+                image_name = attachment_name(absolute_path.relative_to(self.base_dir))
             ri_child = self.soup.new_tag(
                 "ri:attachment", attrs={"ri:filename": image_name}
             )
@@ -1065,16 +1085,36 @@ class ConfluenceDocument:
         return str(self.converter.soup)
 
 
-def attachment_name(name: Union[Path, str]) -> str:
+def attachment_name(ref: Union[Path, str]) -> str:
     """
     Safe name for use with attachment uploads.
 
+    Mutates a relative path such that it meets Confluence's attachment naming requirements.
+
     Allowed characters:
+
     * Alphanumeric characters: 0-9, a-z, A-Z
     * Special characters: hyphen (-), underscore (_), period (.)
     """
 
-    return re.sub(r"[^\-0-9A-Za-z_.]", "_", str(name))
+    if isinstance(ref, Path):
+        path = ref
+    else:
+        path = Path(ref)
+
+    if path.drive or path.root:
+        raise ValueError(f"required: relative path; got: {ref}")
+
+    regexp = re.compile(r"[^\-0-9A-Za-z_.]", re.UNICODE)
+
+    def replace_part(part: str) -> str:
+        if part == "..":
+            return "PAR"
+        else:
+            return regexp.sub("_", part)
+
+    parts = [replace_part(p) for p in path.parts]
+    return Path(*parts).as_posix().replace("/", "_")
 
 
 def sanitize_confluence(html: str) -> str:

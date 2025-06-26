@@ -70,6 +70,9 @@ class TestConversion(unittest.TestCase):
         matcher = Matcher(MatcherOptions(source=".mdignore", extension="md"), self.source_dir)
 
         for entry in os.scandir(self.source_dir):
+            if entry.is_dir():
+                continue
+
             if matcher.is_excluded(entry):
                 continue
 
