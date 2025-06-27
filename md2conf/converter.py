@@ -474,6 +474,14 @@ class ConfluenceStorageFormatConverter:
         LOGGER.error(f"Couldn't find attachment {src_path}")
         return None
 
+    def _warn_or_raise(self, msg: str) -> None:
+        "Emit a warning or raise an exception when a path points to a resource that doesn't exist."
+
+        if self.options.ignore_invalid_url:
+            LOGGER.warning(msg)
+        else:
+            raise DocumentError(msg)
+
     def _transform_links(self) -> None:
         """Converts relative page links to Confluence web links."""
 
@@ -611,24 +619,25 @@ class ConfluenceStorageFormatConverter:
                 return self.soup.new_tag("br")
 
             # resolve relative path into absolute path w.r.t. base dirAdd commentMore actions
-            absolute_path = (self.base_dir / path).resolve(True)
+            absolute_path = (self.base_dir / path).resolve()
 
-            # Logic to prefer PNG over SVG
-            if absolute_path.suffix == ".svg":
-                png_file = absolute_path.with_suffix(".png")
-                if (self.base_dir / png_file).exists():
-                    absolute_path = png_file
+            if absolute_path.exists():
+                # Logic to prefer PNG over SVG
+                if absolute_path.suffix == ".svg":
+                    png_file = absolute_path.with_suffix(".png")
+                    if png_file.exists():
+                        absolute_path = png_file
 
-            if not is_directory_within(absolute_path, self.root_dir):
-                msg = f"relative path to image {path} points to outside root path: {self.root_dir}"
-                if self.options.ignore_invalid_url:
-                    LOGGER.warning(msg)
-                    image_name = ""
+                if is_directory_within(absolute_path, self.root_dir):
+                    self.images.append(absolute_path)
+                    image_name = attachment_name(absolute_path.relative_to(self.base_dir))
                 else:
-                    raise DocumentError(msg)
+                    image_name = ""
+                    self._warn_or_raise(f"path to image {path} points to outside root path {self.root_dir}")
             else:
-                self.images.append(absolute_path)
-                image_name = attachment_name(absolute_path.relative_to(self.base_dir))
+                image_name = ""
+                self._warn_or_raise(f"path to image {path} does not exist")
+
             ri_child = self.soup.new_tag(
                 "ri:attachment", attrs={"ri:filename": image_name}
             )
@@ -664,8 +673,20 @@ class ConfluenceStorageFormatConverter:
             if path is None:
                 return self.soup.new_tag("br")
 
-            self.images.append(path)
-            file_name = attachment_name(path)
+            # resolve relative path into absolute path w.r.t. base dirAdd commentMore actions
+            absolute_path = (self.base_dir / path).resolve()
+
+            if absolute_path.exists():
+                if is_directory_within(absolute_path, self.root_dir):
+                    self.images.append(absolute_path)
+                    file_name = attachment_name(absolute_path.relative_to(self.base_dir))
+                else:
+                    file_name = ""
+                    self._warn_or_raise(f"path to file {path} points to outside root path {self.root_dir}")
+            else:
+                file_name = ""
+                self._warn_or_raise(f"path to file {path} does not exist")
+
             ri_child = self.soup.new_tag(
                 "ri:attachment", attrs={"ri:filename": file_name}
             )
