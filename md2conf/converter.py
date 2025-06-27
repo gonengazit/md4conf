@@ -613,13 +613,13 @@ class ConfluenceStorageFormatConverter:
         ac_image.append(ri_child)
 
         # Add caption if alt text exists
-        if img_tag.has_attr("alt"):
-            assert isinstance(img_tag["alt"], str)
-            caption_tag = self.soup.new_tag("ac:caption")
-            p_tag = self.soup.new_tag("p")
-            p_tag.string = img_tag["alt"]
-            caption_tag.append(p_tag)
-            ac_image.append(caption_tag)
+        # if img_tag.has_attr("alt") and img_tag["alt"] != img_tag["src"]:
+        #     assert isinstance(img_tag["alt"], str)
+        #     caption_tag = self.soup.new_tag("ac:caption")
+        #     p_tag = self.soup.new_tag("p")
+        #     p_tag.string = img_tag["alt"]
+        #     caption_tag.append(p_tag)
+        #     ac_image.append(caption_tag)
 
         return ac_image
 
