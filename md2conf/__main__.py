@@ -158,7 +158,7 @@ def main() -> None:
     parser.add_argument(
         "--no-heading-anchors",
         action="store_false",
-        dest='heading_anchors',
+        dest="heading_anchors",
         help="Don't place an anchor at each section heading.",
     )
     parser.add_argument(

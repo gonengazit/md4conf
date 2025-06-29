@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Optional, TypeVar
 
 import yaml
-
 from strong_typing.core import JsonType
 from strong_typing.serialization import DeserializerOptions, json_to_object
 

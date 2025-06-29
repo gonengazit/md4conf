@@ -75,15 +75,11 @@ class SynchronizingProcessor(Processor):
             parent_page = self.api.get_page_properties(parent_id.page_id)
             while True:
                 try:
-                    page = self.api.get_page_properties_by_title(
-                        node.title, space_key=parent_page.space.key
-                    )
+                    page = self.api.get_page_properties_by_title(node.title, space_key=parent_page.space.key)
                     page_ancestors = self.api.get_page_ancestors(page.id)
                     # page name collision!
                     if not page_ancestors or page_ancestors[-1].id != parent_id.page_id:
-                        LOGGER.info(
-                            f"A page with title: {node.title} already exists in the space. pick a different title:"
-                        )
+                        LOGGER.info(f"A page with title: {node.title} already exists in the space. pick a different title:")
                         node.title = input("> ")
                     else:
                         break
@@ -143,9 +139,7 @@ class SynchronizingProcessor(Processor):
         if document.title is not None:
             meta = self.page_metadata.get(path)
             if meta is not None and meta.title != document.title:
-                conflicting_page_id = self.api.page_exists(
-                    document.title, space_id=self.api.space_key_to_id(meta.space_key)
-                )
+                conflicting_page_id = self.api.page_exists(document.title, space_id=self.api.space_key_to_id(meta.space_key))
                 if conflicting_page_id is None:
                     title = document.title
                 else:

@@ -221,8 +221,8 @@ def title_to_identifier(title: str) -> str:
     and removes non alphanumeric characters"""
 
     s = title.strip().lower()
-    s = re.sub(r'\s', '-', s)
-    s = "".join(filter(lambda c: c.isalnum() or c=="-", s))
+    s = re.sub(r"\s", "-", s)
+    s = "".join(filter(lambda c: c.isalnum() or c == "-", s))
     return s
 
 
@@ -497,18 +497,10 @@ class ConfluenceStorageFormatConverter:
             relative_url = urlparse(url)
 
             # Handle local anchor links (e.g., href="#some-id")
-            if (
-                not relative_url.scheme
-                and not relative_url.netloc
-                and not relative_url.path
-                and not relative_url.params
-                and not relative_url.query
-            ):
+            if not relative_url.scheme and not relative_url.netloc and not relative_url.path and not relative_url.params and not relative_url.query:
                 if self.options.heading_anchors:
                     target = title_to_identifier(relative_url.fragment.lstrip("#"))
-                    link_wrapper = self.soup.new_tag(
-                        "ac:link", attrs={"ac:anchor": target}
-                    )
+                    link_wrapper = self.soup.new_tag("ac:link", attrs={"ac:anchor": target})
                     link_body = self.soup.new_tag("ac:link-body")
                     link_body.extend(anchor.contents)  # Move content
                     link_wrapper.append(link_body)
@@ -541,9 +533,7 @@ class ConfluenceStorageFormatConverter:
                 else:
                     space_key = link_metadata.space_key or self.site_metadata.space_key
                     if not space_key:
-                        raise DocumentError(
-                            "Space key is required to build page links."
-                        )
+                        raise DocumentError("Space key is required to build page links.")
                     page_url = f"{self.site_metadata.base_path}spaces/{space_key}/pages/{link_metadata.page_id}/{encode_title(link_metadata.title)}"
 
                 components = urlparse(page_url)
@@ -639,9 +629,7 @@ class ConfluenceStorageFormatConverter:
                 image_name = ""
                 self._warn_or_raise(f"path to image {path} does not exist")
 
-            ri_child = self.soup.new_tag(
-                "ri:attachment", attrs={"ri:filename": image_name}
-            )
+            ri_child = self.soup.new_tag("ri:attachment", attrs={"ri:filename": image_name})
 
         ac_image.append(ri_child)
 
@@ -688,9 +676,7 @@ class ConfluenceStorageFormatConverter:
                 file_name = ""
                 self._warn_or_raise(f"path to file {path} does not exist")
 
-            ri_child = self.soup.new_tag(
-                "ri:attachment", attrs={"ri:filename": file_name}
-            )
+            ri_child = self.soup.new_tag("ri:attachment", attrs={"ri:filename": file_name})
 
         name_parameter = file_tag.find("ac:parameter")
         assert isinstance(name_parameter, Tag)
@@ -737,25 +723,17 @@ class ConfluenceStorageFormatConverter:
             if language.lower() == "mermaid":
                 # Handle mermaid diagrams
                 if self.options.render_mermaid:
-                    image_data = render_diagram(
-                        content, self.options.diagram_output_format
-                    )
+                    image_data = render_diagram(content, self.options.diagram_output_format)
                     image_hash = hashlib.md5(image_data).hexdigest()
-                    image_filename = (
-                        f"embedded_{image_hash}.{self.options.diagram_output_format}"
-                    )
+                    image_filename = f"embedded_{image_hash}.{self.options.diagram_output_format}"
                     self.embedded_images[image_filename] = image_data
 
                     new_tag = self.soup.new_tag("ac:image")
-                    ri_attachment = self.soup.new_tag(
-                        "ri:attachment", attrs={"ri:filename": image_filename}
-                    )
+                    ri_attachment = self.soup.new_tag("ri:attachment", attrs={"ri:filename": image_filename})
                     new_tag.append(ri_attachment)
                 else:
                     # Diagram macro for live rendering in Confluence
-                    new_tag = self._create_macro(
-                        "macro-diagram", {"syntax": "Mermaid"}, content
-                    )
+                    new_tag = self._create_macro("macro-diagram", {"syntax": "Mermaid"}, content)
             else:
                 # Standard code block macro
                 params = {"language": language, "theme": "Default"}
@@ -779,9 +757,7 @@ class ConfluenceStorageFormatConverter:
             else:
                 class_list = []
 
-            admonition_type = next(
-                (c for c in class_list if c in ["info", "tip", "note", "warning"]), None
-            )
+            admonition_type = next((c for c in class_list if c in ["info", "tip", "note", "warning"]), None)
             if not admonition_type:
                 continue
 
@@ -791,9 +767,7 @@ class ConfluenceStorageFormatConverter:
                 params["title"] = title_p.get_text(strip=True)
                 title_p.decompose()  # Remove the title paragraph
 
-            macro = self._create_macro(
-                admonition_type, params, rich_text_body=div.contents
-            )
+            macro = self._create_macro(admonition_type, params, rich_text_body=div.contents)
             div.replace_with(macro)
 
     def _transform_alerts(self) -> None:
@@ -859,9 +833,7 @@ class ConfluenceStorageFormatConverter:
                     # Gal: Should always be true due to the find filter...
                     assert string is not None
 
-                    title_stripped = self.soup.new_tag(
-                        "strong", string=string.lstrip()[skip:]
-                    )
+                    title_stripped = self.soup.new_tag("strong", string=string.lstrip()[skip:])
 
                     first_text_node.replace_with(title_stripped)
 
@@ -879,16 +851,12 @@ class ConfluenceStorageFormatConverter:
             title = summary.get_text(strip=True)
             summary.decompose()  # Remove summary from content
 
-            macro = self._create_macro(
-                "expand", {"title": title}, rich_text_body=details.contents
-            )
+            macro = self._create_macro("expand", {"title": title}, rich_text_body=details.contents)
             details.replace_with(macro)
 
     def _transform_emojis(self) -> None:
         """Transforms emoji spans into emoticons."""
-        for span in bs4_find_all(
-            self.soup, "span", attrs={"data-emoji-shortname": True}
-        ):
+        for span in bs4_find_all(self.soup, "span", attrs={"data-emoji-shortname": True}):
             shortname = span["data-emoji-shortname"]
             assert isinstance(shortname, str)
             emoji_id = span.get("data-emoji-unicode", "")
@@ -953,34 +921,23 @@ class ConfluenceStorageFormatConverter:
             # attempt to deal with a bug with the rtl plugin - where a <p> inside an <li> doesn't render correctly rtl
             # we deal with this by removing the <p> - if it is the only one
             # this might miss some edge cases or cause some weirdnesses - but it's probably good enough
-            if len(li.contents)!=1:
+            if len(li.contents) != 1:
                 continue
             first_tag = li.contents[0]
             if isinstance(first_tag, Tag) and first_tag.name == "p":
                 first_tag.replace_with_children()
 
     def _transform_math(self) -> None:
-        for math_inline in bs4_find_all(
-            self.soup, "span", attrs={"class": "math inline"}
-        ):
+        for math_inline in bs4_find_all(self.soup, "span", attrs={"class": "math inline"}):
             math_string = math_inline.string
             assert math_string is not None
-            math_macro = self._create_macro(
-                "mathinline",
-                {"atlassian-macro-output-type": "INLINE"},
-                plain_text_body=math_string.lstrip(" (\\").rstrip("\\) ")
-            )
+            math_macro = self._create_macro("mathinline", {"atlassian-macro-output-type": "INLINE"}, plain_text_body=math_string.lstrip(" (\\").rstrip("\\) "))
             math_inline.replace_with(math_macro)
 
-        for math_block in bs4_find_all(
-            self.soup, "span", attrs={"class": "math display"}
-        ):
+        for math_block in bs4_find_all(self.soup, "span", attrs={"class": "math display"}):
             math_string = math_block.string
             assert math_string is not None
-            math_macro = self._create_macro(
-                "mathdisplay",
-                plain_text_body=math_string.lstrip("\\[ ").rstrip("]\\ ")
-            )
+            math_macro = self._create_macro("mathdisplay", plain_text_body=math_string.lstrip("\\[ ").rstrip("]\\ "))
             math_macro["data-layout"] = "default"
             math_block.replace_with(math_macro)
 

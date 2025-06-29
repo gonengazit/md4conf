@@ -215,9 +215,7 @@ class Processor:
 
         return parent
 
-    def _index_file(
-        self, path: Path, is_parent: Optional[bool] = False
-    ) -> DocumentNode:
+    def _index_file(self, path: Path, is_parent: Optional[bool] = False) -> DocumentNode:
         """
         Indexes a single Markdown file.
         """

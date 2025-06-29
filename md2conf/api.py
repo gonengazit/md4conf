@@ -19,7 +19,6 @@ from typing import Any, Optional, TypeVar
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import requests
-
 from strong_typing.core import JsonType
 from strong_typing.serialization import DeserializerOptions, json_dump_string, json_to_object, object_to_json
 
@@ -140,6 +139,7 @@ class ConfluenceAttachment:
 class ConfluenceSpace:
     key: str
     name: str
+
 
 @dataclass(frozen=True)
 class ConfluencePageProperties:
@@ -419,10 +419,7 @@ class ConfluenceSession:
         """
 
         path = f"/content/{page_id}/child/attachment"
-        query = {
-            "filename": filename,
-            "expand": "version"
-        }
+        query = {"filename": filename, "expand": "version"}
         payload = self._invoke(path, query)
         data = typing.cast(dict[str, JsonType], payload)
 
@@ -616,10 +613,7 @@ class ConfluenceSession:
 
         LOGGER.info("Looking up page with title: %s", title)
         path = "/content"
-        query = {
-            "title": title,
-            "expand": "space,version"
-        }
+        query = {"title": title, "expand": "space,version"}
         if space_key is not None:
             query["spaceKey"] = space_key
 
@@ -646,7 +640,7 @@ class ConfluenceSession:
             "expand": "body.storage,version,space",
         }
         if space_key is not None:
-            query["spaceKey"]=space_key
+            query["spaceKey"] = space_key
 
         payload = self._invoke(path, query)
         return _json_to_object(ConfluencePage, payload)
@@ -735,7 +729,7 @@ class ConfluenceSession:
                     value=new_content,
                 )
             ),
-            ancestors = [ConfluenceAncestor(type=ConfluencePageContentType.PAGE, id=parent_page.id)]
+            ancestors=[ConfluenceAncestor(type=ConfluencePageContentType.PAGE, id=parent_page.id)],
         )
 
         url = self._build_url(path)
