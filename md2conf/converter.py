@@ -953,8 +953,9 @@ class ConfluenceStorageFormatConverter:
             math_string = math_inline.string
             assert math_string is not None
             math_macro = self._create_macro(
-                "eazy-math-inline",
-                {"body": math_string.lstrip(" (\\").rstrip("\\) ")},
+                "mathinline",
+                {"atlassian-macro-output-type": "INLINE"},
+                plain_text_body=math_string.lstrip(" (\\").rstrip("\\) ")
             )
             math_inline.replace_with(math_macro)
 
@@ -964,11 +965,8 @@ class ConfluenceStorageFormatConverter:
             math_string = math_block.string
             assert math_string is not None
             math_macro = self._create_macro(
-                "easy-math-block",
-                {
-                    "body": math_string.lstrip("\\[ ").rstrip("]\\ "),
-                    "align": "center",
-                },
+                "mathdisplay",
+                plain_text_body=math_string.lstrip("\\[ ").rstrip("]\\ ")
             )
             math_macro["data-layout"] = "default"
             math_block.replace_with(math_macro)
