@@ -395,6 +395,7 @@ class ConfluenceStorageFormatConverter:
         self._transform_sections()
         self._transform_emojis()
         self._transform_paragraphs()
+        self._transform_list_items()
         self._transform_math()
 
     def _create_macro(
@@ -945,6 +946,18 @@ class ConfluenceStorageFormatConverter:
                 set_direction_style(new_ps[-1], last_p_rtl)
 
             p.replace_with(*new_ps)
+
+    def _transform_list_items(self):
+        for li in bs4_find_all(self.soup, "li"):
+            set_direction_style(li, is_rtl(element_to_text(li)))
+            # attempt to deal with a bug with the rtl plugin - where a <p> inside an <li> doesn't render correctly rtl
+            # we deal with this by removing the <p> - if it is the only one
+            # this might miss some edge cases or cause some weirdnesses - but it's probably good enough
+            if len(li.contents)!=1:
+                continue
+            first_tag = li.contents[0]
+            if isinstance(first_tag, Tag) and first_tag.name == "p":
+                first_tag.replace_with_children()
 
     def _transform_math(self) -> None:
         for math_inline in bs4_find_all(
