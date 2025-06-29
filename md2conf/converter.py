@@ -209,11 +209,14 @@ _languages = [
 
 
 def title_to_identifier(title: str) -> str:
-    "Converts a section heading title to a GitHub-style Markdown same-page anchor."
+    """Converts a section heading title to a GitHub-style Markdown same-page anchor.
+
+    converts the heading to lowercase, replaces all whitespaces with dashes,
+    and removes non alphanumeric characters"""
 
     s = title.strip().lower()
-    s = re.sub("[^ A-Za-z0-9]", "", s)
-    s = s.replace(" ", "-")
+    s = re.sub(r'\s', '-', s)
+    s = "".join(filter(lambda c: c.isalnum() or c=="-", s))
     return s
 
 
