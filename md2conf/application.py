@@ -76,10 +76,11 @@ class SynchronizingProcessor(Processor):
             while True:
                 try:
                     page = self.api.get_page_properties_by_title(
-                        node.title, space_id=parent_page.spaceId
+                        node.title, space_key=parent_page.space.key
                     )
+                    page_ancestors = self.api.get_page_ancestors(page.id)
                     # page name collision!
-                    if page.parentId != parent_id.page_id:
+                    if not page_ancestors or page_ancestors[-1].id != parent_id.page_id:
                         LOGGER.info(
                             f"A page with title: {node.title} already exists in the space. pick a different title:"
                         )
@@ -94,7 +95,7 @@ class SynchronizingProcessor(Processor):
         else:
             raise PageError("page should have title, or id for the root page!")
 
-        space_key = self.api.space_id_to_key(page.spaceId)
+        space_key = page.space.key
         if update:
             self._update_markdown(
                 node.absolute_path,
