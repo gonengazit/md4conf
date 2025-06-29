@@ -16,7 +16,7 @@ class ConfluenceSiteMetadata:
     Data associated with a Confluence wiki site.
 
     :param domain: Confluence organization domain (e.g. `levente-hunyadi.atlassian.net`).
-    :param base_path: Base path for Confluence (default: `/wiki/`).
+    :param base_path: Base path for Confluence (default: `/`).
     :param space_key: Confluence space key for new pages (e.g. `~hunyadi` or `INST`).
     """
 

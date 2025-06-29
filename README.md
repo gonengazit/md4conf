@@ -332,7 +332,7 @@ options:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
   -d, --domain DOMAIN   Confluence organization domain.
-  -p, --path PATH       Base path for Confluence (default: '/wiki/').
+  -p, --path PATH       Base path for Confluence (default: '/').
   --api-url API_URL     Confluence API URL. Required for scoped tokens. Refer to documentation how to obtain one.
   -u, --username USERNAME
                         Confluence user name.

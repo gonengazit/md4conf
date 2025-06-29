@@ -76,7 +76,7 @@ class ConfluenceSiteProperties:
         if not opt_domain:
             raise ArgumentError("Confluence domain not specified")
         if not opt_base_path:
-            opt_base_path = "/wiki/"
+            opt_base_path = "/"
 
         self.domain = _validate_domain(opt_domain)
         self.base_path = _validate_base_path(opt_base_path)
@@ -124,7 +124,7 @@ class ConfluenceConnectionProperties:
         if not opt_api_url and not opt_domain:
             raise ArgumentError("Confluence API URL or domain required")
         if not opt_api_url and not opt_base_path:
-            opt_base_path = "/wiki/"
+            opt_base_path = "/"
 
         self.api_url = opt_api_url
         self.domain = _validate_domain(opt_domain)
